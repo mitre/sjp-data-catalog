@@ -18,8 +18,16 @@ library(htmltools)
 library(MITREShiny)
 
 
-sheet_names <- excel_sheets("./data/sjp_data_catalog.xlsx")
-catalog <- lapply(sheet_names, function(X) read_excel("./data/sjp_data_catalog.xlsx", sheet = X))
+
+# Data folder
+data_folder <- file.path(
+  gsub("\\\\","/", gsub("OneDrive - ","", Sys.getenv("OneDrive"))), 
+  "Social Justice Platform WSs - Data Catalog")
+
+# Catalog data
+path_to_catalog <- file.path(data_folder, "sjp_data_catalog.xlsx")
+sheet_names <- excel_sheets(path_to_catalog)
+catalog <- lapply(sheet_names, function(X) read_excel(path_to_catalog, sheet = X))
 names(catalog) <- sheet_names
 
 list_of_tags <- catalog$'list of tags'
@@ -218,6 +226,7 @@ server <- function(input, output, session) {
       bsCollapsePanel(
         title = tmp_catalog[i, "Name"],
         value = paste0("rsc_", i),
+        HTML(paste0("<p><b>Source:</b> ", tmp_catalog[i, "Source"], "</p>")),
         HTML(paste0("<p><b>Decription:</b> ", tmp_catalog[i, "Description"], "</p>")),
         HTML(paste0("<p><b>Tags:</b> ", tmp_catalog[i, "Tags"], "</p>")),
         HTML(paste0("<p><b>URL:</b> <a href=", tmp_catalog[i, "Link"], ">", tmp_catalog[i, "Link"], "</a></p>")),
