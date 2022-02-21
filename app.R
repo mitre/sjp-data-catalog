@@ -18,6 +18,8 @@ library(htmltools)
 library(MITREShiny)
 
 
+# suporting functions
+source("utility.R")
 
 # Data folder
 data_folder <- file.path(
@@ -193,7 +195,7 @@ server <- function(input, output, session) {
     # Get the list of selected tags
     select_tags <- selected_tags()
     
-    tmp_catalog <- full_catalog
+    tmp_catalog <<- full_catalog
     
     # If tags have been selected, how only the sources for the selected tags
     if (!is.null(unlist(select_tags))) {
@@ -214,41 +216,53 @@ server <- function(input, output, session) {
               rmv_indices <- c(rmv_indices, i)
             } 
           }
-          tmp_catalog <- tmp_catalog[-rmv_indices,]
+          tmp_catalog <<- tmp_catalog[-rmv_indices,]
         }
       }
       
       selected_rscs(tmp_catalog)
     }
     
-    # Define all the collpase panels for each of the filtered resources
-    collapseArgs <- lapply(1:nrow(tmp_catalog), function(i) {
-      bsCollapsePanel(
-        title = tmp_catalog[i, "Name"],
-        value = paste0("rsc_", i),
-        HTML(paste0("<p><b>Source:</b> ", tmp_catalog[i, "Source"], "</p>")),
-        HTML(paste0("<p><b>Decription:</b> ", tmp_catalog[i, "Description"], "</p>")),
-        HTML(paste0("<p><b>Tags:</b> ", tmp_catalog[i, "Tags"], "</p>")),
-        HTML(paste0("<p><b>URL:</b> <a href=", tmp_catalog[i, "Link"], ">", tmp_catalog[i, "Link"], "</a></p>")),
-        fluidRow(
-          column(
-            width = 12,
-            align = "right",
-            actionButton(
-              inputId = paste0("add_to_cart_rsc_", i), 
-              label = icon("cart-plus")
+    if (nrow(tmp_catalog) > 0) {
+      # Define all the collpase panels for each of the filtered resources
+      collapseArgs <- lapply(1:nrow(tmp_catalog), function(i) {
+        bsCollapsePanel(
+          title = tmp_catalog[i, "Name"],
+          value = paste0("rsc_", i),
+          HTML(gen_rsc_info(tmp_catalog[i,])),
+          # HTML(paste0("<p><b>Source:</b> ", tmp_catalog[i, "Source"], "</p>")),
+          # HTML(paste0("<p><b>Decription:</b> ", tmp_catalog[i, "Description"], "</p>")),
+          # HTML(paste0("<p><b>Tags:</b> ", tmp_catalog[i, "Tags"], "</p>")),
+          # HTML(paste0("<p><b>URL:</b> <a href=", tmp_catalog[i, "Link"], ">", tmp_catalog[i, "Link"], "</a></p>")),
+          fluidRow(
+            column(
+              width = 12,
+              align = "right",
+              actionButton(
+                inputId = paste0("add_to_cart_rsc_", i), 
+                label = icon("cart-plus")
+              )
             )
           )
         )
-        
+      })
+      
+      # Additional bsCollapse arguments
+      collapseArgs[["multiple"]] <- TRUE
+      collapseArgs[["open"]] <- unlist(lapply(1:nrow(tmp_catalog), function(i) {paste0("rsc_", i)}))
+      
+      do.call(bsCollapse, collapseArgs)
+      
+    } else {
+      fluidRow(
+        column(
+          width = 12, 
+          align = "center",
+          HTML("<i>No resources match the criteria from your search.</i>")
+        )
       )
-    })
+    }
     
-    # Additional bsCollapse arguments
-    collapseArgs[["multiple"]] <- TRUE
-    collapseArgs[["open"]] <- unlist(lapply(1:nrow(tmp_catalog), function(i) {paste0("rsc_", i)}))
-    
-    do.call(bsCollapse, collapseArgs)
 
   })
   
