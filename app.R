@@ -60,6 +60,7 @@ ui <- navbarPage(
           # Display checkbox groups for each subcategory within each tag type
           div(
             # Overarching tag types
+            style = 'padding-top: 5px',
             actionLink(
               inputId = paste0("label_", gsub(" ", "_", t)), 
               label = t, 
@@ -86,11 +87,12 @@ ui <- navbarPage(
               } else {
                 # Show subcategories within each tag type
                 div(
-                  style = 'padding: 5px 0px 0px 1em', 
+                  style = 'padding-left: 1em', 
                   lapply(subcats, function(s) {
                     if (is.na(s)) {
                       # Assign any tags without a subcategory to "Other"
                       div(
+                        style = 'padding-top: 5px',
                         actionLink(
                           inputId = paste("label", gsub(" ", "_", t), "Other", sep = "_"),
                           label = "Other",
@@ -113,6 +115,7 @@ ui <- navbarPage(
                     } else {
                       # Otherwise group tags together by their designated subcategory
                       div(
+                        style = 'padding-top: 5px',
                         actionLink(
                           inputId = paste("label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
                           label = s,
@@ -121,7 +124,7 @@ ui <- navbarPage(
                         conditionalPanel(
                           paste0("input.label_", gsub(" ", "_", t), "_", gsub(" ", "_", s), " % 2 == 1"),
                           div(
-                            style = 'padding: 5px 0px 5px 1em',
+                            style = 'padding: 5px 0px 0px 1em',
                             checkboxGroupInput(
                               inputId = paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--"),
                               label = NULL,
