@@ -32,7 +32,7 @@ sheet_names <- excel_sheets(path_to_catalog)
 catalog <- lapply(sheet_names, function(X) read_excel(path_to_catalog, sheet = X))
 names(catalog) <- sheet_names
 
-list_of_tags <- catalog$'list of tags'
+list_of_tags <<- catalog$'list of tags'
 tag_types <- unique(list_of_tags$'Tag Type')
   
 
@@ -46,6 +46,7 @@ ui <- navbarPage(
     
     sidebarLayout(
       sidebarPanel(
+        width = 3,
         textInput(
           inputId = "search",
           label = NULL,
@@ -53,12 +54,91 @@ ui <- navbarPage(
         ),
         
         lapply(tag_types, function(t) {
-          checkboxGroupInput(
-            inputId = gsub(" ", "_", t),
-            label = h4(t),
-            selected = NULL,
-            choiceNames = list_of_tags$Tags[list_of_tags$'Tag Type' == t],
-            choiceValues = list_of_tags$Tags[list_of_tags$'Tag Type' == t]
+          tags <- list_of_tags[list_of_tags$'Tag Type' == t, ]
+          subcats <- sort(unique(tags$Subcategory), na.last = TRUE)
+            
+          # Display checkbox groups for each subcategory within each tag type
+          div(
+            # Overarching tag types
+            actionLink(
+              inputId = paste0("label_", gsub(" ", "_", t)), 
+              label = t, 
+              icon("caret-right")
+            ),
+            
+            # Show/hide the info within each tag type
+            conditionalPanel(
+              paste0("input.label_", gsub(" ", "_", t)," % 2 == 1"),
+              
+              if (all(is.na(subcats))) {
+                # If there are no subcategories, just show the checkbox group
+                div(
+                  style = 'padding: 5px 0px 0px 1em',
+                  checkboxGroupInput(
+                    inputId = gsub(" ", "_", t),
+                    label = NULL,
+                    selected = NULL,
+                    choiceNames = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)]),
+                    choiceValues = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)])
+                  )
+                )
+                
+              } else {
+                # Show subcategories within each tag type
+                div(
+                  style = 'padding: 5px 0px 0px 1em', 
+                  lapply(subcats, function(s) {
+                    if (is.na(s)) {
+                      # Assign any tags without a subcategory to "Other"
+                      div(
+                        actionLink(
+                          inputId = paste("label", gsub(" ", "_", t), "Other", sep = "_"),
+                          label = "Other",
+                          icon("caret-right")
+                        ),
+                        conditionalPanel(
+                          paste0("input.label_", gsub(" ", "_", t), "_Other", " % 2 == 1"),
+                          div(
+                            style = 'padding: 5px 0px 0px 1em',
+                            checkboxGroupInput(
+                              inputId = paste(gsub(" ", "_", t), "Other", sep = "--"),
+                              label = NULL,
+                              selected = NULL,
+                              choiceNames = tags$Tags[is.na(tags$'Subcategory')],
+                              choiceValues = tags$Tags[is.na(tags$'Subcategory')]
+                            )
+                          )
+                        )
+                      )
+                    } else {
+                      # Otherwise group tags together by their designated subcategory
+                      div(
+                        actionLink(
+                          inputId = paste("label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
+                          label = s,
+                          icon("caret-right")
+                        ),
+                        conditionalPanel(
+                          paste0("input.label_", gsub(" ", "_", t), "_", gsub(" ", "_", s), " % 2 == 1"),
+                          div(
+                            style = 'padding: 5px 0px 5px 1em',
+                            checkboxGroupInput(
+                              inputId = paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--"),
+                              label = NULL,
+                              selected = NULL,
+                              choiceNames = tags$Tags[which(tags$'Subcategory' == s)],
+                              choiceValues = tags$Tags[which(tags$'Subcategory' == s)]
+                            )
+                          )
+                        )
+                      )
+                    }
+                    
+                    
+                  })
+                )
+              }
+            )
           )
         }),
         
@@ -66,6 +146,9 @@ ui <- navbarPage(
           column(
             width = 12,
             align="center",
+            
+            br(),
+            
             actionButton(
               inputId = "go",
               label = "Go"
@@ -80,6 +163,7 @@ ui <- navbarPage(
       ),
       
       mainPanel(
+        width = 9,
         uiOutput(outputId = "sources_output")
       )
     )
@@ -116,6 +200,10 @@ ui <- navbarPage(
             actionButton(
               inputId = "clear_cart",
               label = "Remove All"
+            ),
+            actionButton(
+              inputId = "export",
+              label = "Export"
             )
           )
         ),
@@ -171,20 +259,108 @@ server <- function(input, output, session) {
   # List of saved resources (i.e. shopping cart)
   shopping_list <- reactiveVal(list())
   
+  # Toggle the carets on the checkbox menu labels
+  lapply(tag_types, function(t) {
+    # Labels for tag types
+    observeEvent(input[[paste("label", gsub(" ", "_", t), sep = "_")]], {
+      if (input[[paste("label", gsub(" ", "_", t), sep = "_")]] %% 2 == 1) {
+        updateActionLink(
+          session = session,
+          inputId = paste("label", gsub(" ", "_", t), sep = "_"),
+          icon = icon("caret-down")
+        )
+      } else {
+        updateActionLink(
+          session = session,
+          inputId = paste("label", gsub(" ", "_", t), sep = "_"),
+          icon = icon("caret-right")
+        )
+      }
+    })
+    
+    # Labels for any subcategories
+    subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
+    
+    # If there are no subcategories, don't need to do anything more, so just checking for tag types with subcategories
+    if (!all(is.na(subcats))) {
+      lapply(subcats, function(s) {
+        if (is.na(s)) {
+          s <- "Other"
+        }
+        
+        observeEvent(input[[paste("label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_")]], {
+          if (input[[paste("label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_")]] %% 2 == 1) {
+            updateActionLink(
+              session = session,
+              inputId = paste("label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
+              icon = icon("caret-down")
+            )
+          } else {
+            updateActionLink(
+              session = session,
+              inputId = paste("label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
+              icon = icon("caret-right")
+            )
+          }
+        })
+      })
+    } 
+  })
+    
+  
+  
   observeEvent(input$go, {
     # Update selected tags on button press
-    selected_tags(lapply(tag_types, function(t) {input[[gsub(" ", "_", t)]]}))
+    selected_tags(
+      lapply(tag_types, function(t) {
+        # Want to group tags from the subcategories together to pass to selected_tags
+        subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
+        select_tags_type <- c()
+        if (all(is.na(subcats))) {
+          # If there are no subcategories, checkbox group ID is just the 
+          select_tags_type <- c(select_tags_type, input[[gsub(" ", "_", t)]])
+        } else {
+          for (s in subcats) {
+            if (is.na(s)) {
+              s <- "Other"
+            }
+            
+            select_tags_type <- c(select_tags_type, input[[paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--")]])
+          }
+        }
+        
+        return(select_tags_type)
+      })
+    )
+    
+    # Update names of the list to be each of the tag types
     selected_tags(setNames(selected_tags(), tag_types))
   })
   
   observeEvent(input$clear, {
     # Reset all of the checkboxes
     for (t in tag_types) {
-      updateCheckboxGroupInput(
-        session, 
-        inputId = gsub(" ", "_", t), 
-        selected = FALSE
-      )
+      subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
+      
+      if (all(is.na(subcats))) {
+        updateCheckboxGroupInput(
+          session, 
+          inputId = gsub(" ", "_", t), 
+          selected = FALSE
+        )
+      } else {
+        for (s in subcats) {
+          if (is.na(s)) {
+            s <- "Other"
+          }
+          
+          updateCheckboxGroupInput(
+            session, 
+            inputId = paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--"), 
+            selected = FALSE
+          )
+        }
+      }
     }
     
     # Clear the list of selected tags
@@ -197,7 +373,7 @@ server <- function(input, output, session) {
     
     tmp_catalog <<- full_catalog
     
-    # If tags have been selected, how only the sources for the selected tags
+    # If tags have been selected, show only the sources for the selected tags
     if (!is.null(unlist(select_tags))) {
       # Filter according to each type of tag
       for (tag_type in names(select_tags)) {
@@ -230,10 +406,6 @@ server <- function(input, output, session) {
           title = tmp_catalog[i, "Name"],
           value = paste0("rsc_", i),
           HTML(gen_rsc_info(tmp_catalog[i,])),
-          # HTML(paste0("<p><b>Source:</b> ", tmp_catalog[i, "Source"], "</p>")),
-          # HTML(paste0("<p><b>Decription:</b> ", tmp_catalog[i, "Description"], "</p>")),
-          # HTML(paste0("<p><b>Tags:</b> ", tmp_catalog[i, "Tags"], "</p>")),
-          # HTML(paste0("<p><b>URL:</b> <a href=", tmp_catalog[i, "Link"], ">", tmp_catalog[i, "Link"], "</a></p>")),
           fluidRow(
             column(
               width = 12,
@@ -262,7 +434,6 @@ server <- function(input, output, session) {
         )
       )
     }
-    
 
   })
   
@@ -272,9 +443,10 @@ server <- function(input, output, session) {
       tmp <- shopping_list()
       
       rsc_name <- selected_rscs()[i, "Name"]
+      rsc_type <- strsplit(selected_rscs()[i, "Tags"], ";")[[1]][1]
       rsc_url <- selected_rscs()[i, "Link"]
       
-      tmp[[rsc_name]] <- rsc_url
+      tmp[[rsc_name]] <- c(rsc_type, rsc_url)
       shopping_list(tmp)
     })
     
@@ -291,13 +463,20 @@ server <- function(input, output, session) {
     if (length(shopping_list()) > 0) {
       lapply(1:length(shopping_list()), function(i) {
         rsc_name <- names(shopping_list())[i]
-        rsc_url <- shopping_list()[[names(shopping_list())[i]]]
+        rsc_type <- shopping_list()[[names(shopping_list())[i]]][1]
+        rsc_url <- shopping_list()[[names(shopping_list())[i]]][2]
         
         fluidRow(
           column(
             width = 4,
             align = "left",
             rsc_name
+          ),
+          
+          column(
+            width = 2,
+            align = "left",
+            rsc_type
           ),
           
           column(
