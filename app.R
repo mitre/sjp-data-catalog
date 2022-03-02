@@ -204,9 +204,19 @@ ui <- navbarPage(
               inputId = "clear_cart",
               label = "Remove All"
             ),
-            actionButton(
+            dropdownButton(
               inputId = "export",
-              label = "Export"
+              label = "Export...",
+              circle = FALSE,
+              inline = TRUE,
+              actionLink(
+                inputId = "export_to_csv",
+                label = "To CSV"
+              ),
+              actionLink(
+                inputId = "export_to_pdf",
+                label = "To PDF"
+              )
             )
           )
         ),
@@ -255,6 +265,7 @@ server <- function(input, output, session) {
   tables <- catalog$tables
   tools <- catalog$tools
   full_catalog <- rbind.fill(datasets, repos, methods, tables, tools)
+  full_catalog <- full_catalog[order(full_catalog$Name), ]
   
   # Start with all resources selected
   selected_rscs <- reactiveVal(full_catalog)
@@ -444,13 +455,14 @@ server <- function(input, output, session) {
     # Individual "Add to Cart" buttons
     observeEvent(input[[paste0("add_to_cart_rsc_", i)]], {
       tmp <- shopping_list()
-      
       rsc_name <- selected_rscs()[i, "Name"]
-      rsc_type <- strsplit(selected_rscs()[i, "Tags"], ";")[[1]][1]
-      rsc_url <- selected_rscs()[i, "Link"]
-      
-      tmp[[rsc_name]] <- c(rsc_type, rsc_url)
+      tmp[[rsc_name]] <- selected_rscs()[i, ]
       shopping_list(tmp)
+    })
+    
+    # Individual "Expand" buttons in cart
+    observeEvent(input[[paste0("expand_cart_rsc_", i)]], {
+      
     })
     
     # Individual "Remove from Cart" buttons
@@ -466,34 +478,53 @@ server <- function(input, output, session) {
     if (length(shopping_list()) > 0) {
       lapply(1:length(shopping_list()), function(i) {
         rsc_name <- names(shopping_list())[i]
-        rsc_type <- shopping_list()[[names(shopping_list())[i]]][1]
-        rsc_url <- shopping_list()[[names(shopping_list())[i]]][2]
+        rsc_info <- shopping_list()[[rsc_name]]
+        rsc_type <- strsplit(rsc_info$Tags, ";")[[1]][1]
+        rsc_url <- rsc_info$Link
         
-        fluidRow(
-          column(
-            width = 4,
-            align = "left",
-            rsc_name
+        div(
+          fluidRow(
+            column(
+              width = 4,
+              align = "left",
+              rsc_name
+            ),
+            
+            column(
+              width = 2,
+              align = "left",
+              rsc_type
+            ),
+            
+            column(
+              width = 4,
+              align = "left",
+              HTML("<a href=", rsc_url, ">", rsc_url, "</a>")
+            ),
+            
+            column(
+              width = 2,
+              align = "right",
+              actionButton(
+                inputId = paste0("expand_cart_rsc_", i),
+                label = "Expand"
+              ),
+              actionButton(
+                inputId = paste0("rmv_cart_rsc_", i),
+                label = icon("trash")
+              )
+            )
           ),
           
-          column(
-            width = 2,
-            align = "left",
-            rsc_type
-          ),
-          
-          column(
-            width = 5,
-            align = "left",
-            HTML("<a href=", rsc_url, ">", rsc_url, "</a>")
-          ),
-          
-          column(
-            width = 1,
-            align = "right",
-            actionButton(
-              inputId = paste0("rmv_cart_rsc_", i),
-              label = icon("trash")
+          fluidRow(
+            column(
+              width = 12,
+              
+              conditionalPanel(
+                paste0("input.expand_cart_rsc_", i," % 2 == 1"),
+                HTML(gen_rsc_info(rsc_info)),
+              )
+              
             )
           )
         )
@@ -504,6 +535,14 @@ server <- function(input, output, session) {
   
   observeEvent(input$clear_cart, {
     shopping_list(list())
+  })
+  
+  observeEvent(input$export_to_pdf, {
+    print(shopping_list())
+  })
+  
+  observeEvent(input$export_to_csv, {
+    print(shopping_list())
   })
   
 
