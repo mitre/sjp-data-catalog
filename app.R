@@ -454,9 +454,9 @@ server <- function(input, output, session) {
   lapply(1:nrow(full_catalog), function(i) {
     # Individual "Add to Cart" buttons
     observeEvent(input[[paste0("add_to_cart_rsc_", i)]], {
-      tmp <- shopping_list()
+      tmp <<- shopping_list()
       rsc_name <- selected_rscs()[i, "Name"]
-      tmp[[rsc_name]] <- selected_rscs()[i, ]
+      tmp[[rsc_name]] <<- selected_rscs()[i, ]
       shopping_list(tmp)
     })
     
@@ -542,7 +542,18 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$export_to_csv, {
-    print(shopping_list())
+    if (length(shopping_list()) > 0) {
+      col_names <- names(shopping_list()[[names(shopping_list())[1]]])
+      cart_df <- data.frame(matrix(ncol=length(col_names), nrow=0))
+      colnames(cart_df) <- col_names
+      
+      for (n in names(shopping_list())){
+        cart_df[nrow(cart_df)+1, ] <- shopping_list()[[n]]
+      }
+      
+      write.csv(x = cart_df, file = choose.files(default=paste0("SavedResources_SJPCatalog_", Sys.Date(), ".csv"), caption="Save file", multi=FALSE))
+    }
+    
   })
   
 
