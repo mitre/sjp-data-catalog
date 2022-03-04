@@ -47,12 +47,30 @@ ui <- navbarPage(
     sidebarLayout(
       sidebarPanel(
         width = 3,
-        textInput(
-          inputId = "search",
-          label = NULL,
-          value = "Search"
+        
+        h6("Search Keywords"),
+        fluidRow(
+          column(
+            width=9,
+            textInput(
+              inputId = "search",
+              label = NULL,
+              placeholder = "Search"
+            )
+          ),
+          column(
+            width=3,
+            actionButton(
+              inputId = "go",
+              label = "Go"
+            )
+          )
         ),
         
+        
+        hr(),
+        
+        h6("Filter by Tags"),
         lapply(tag_types, function(t) {
           tags <- list_of_tags[list_of_tags$'Tag Type' == t, ]
           subcats <- sort(unique(tags$Subcategory), na.last = TRUE)
@@ -106,8 +124,8 @@ ui <- navbarPage(
                               inputId = paste(gsub(" ", "_", t), "Other", sep = "--"),
                               label = NULL,
                               selected = NULL,
-                              choiceNames = tags$Tags[is.na(tags$'Subcategory')],
-                              choiceValues = tags$Tags[is.na(tags$'Subcategory')]
+                              choiceNames = sort(tags$Tags[is.na(tags$'Subcategory')]),
+                              choiceValues = sort(tags$Tags[is.na(tags$'Subcategory')])
                             )
                           )
                         )
@@ -129,8 +147,8 @@ ui <- navbarPage(
                               inputId = paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--"),
                               label = NULL,
                               selected = NULL,
-                              choiceNames = tags$Tags[which(tags$'Subcategory' == s)],
-                              choiceValues = tags$Tags[which(tags$'Subcategory' == s)]
+                              choiceNames = sort(tags$Tags[which(tags$'Subcategory' == s)]),
+                              choiceValues = sort(tags$Tags[which(tags$'Subcategory' == s)])
                             )
                           )
                         )
@@ -153,8 +171,8 @@ ui <- navbarPage(
             br(),
             
             actionButton(
-              inputId = "go",
-              label = "Go"
+              inputId = "filter",
+              label = "Filter"
             ),
             
             actionButton(
@@ -167,6 +185,25 @@ ui <- navbarPage(
       
       mainPanel(
         width = 9,
+        div(
+          align = "right",
+          "Sort by: ",
+          pickerInput(
+            inputId = "sort_by",
+            label = NULL,
+            choices = c("Alphabetical", "Year: Oldest to Newest", "Year: Newest to Oldest"),
+            selected = "Alphabetical",
+            inline = TRUE
+          ),
+          "Show per page: ",
+          pickerInput(
+            inputId = "sort_by",
+            label = NULL,
+            choices = c(5, 10, 20, "All"),
+            selected = 10,
+            inline = TRUE
+          ),
+        ),
         uiOutput(outputId = "sources_output")
       )
     )
@@ -265,7 +302,8 @@ server <- function(input, output, session) {
   tables <- catalog$tables
   tools <- catalog$tools
   full_catalog <- rbind.fill(datasets, repos, methods, tables, tools)
-  full_catalog <- full_catalog[order(full_catalog$Name), ]
+  full_catalog <- full_catalog[order(full_catalog$Name), ]  #start off ordered alphabetically because that's what the default selection is
+  colnames(full_catalog) <- unlist(lapply(colnames(full_catalog), function(x) {gsub(" ", "_", x)})) #changing column names so that there are no spaces
   
   # Start with all resources selected
   selected_rscs <- reactiveVal(full_catalog)
@@ -321,9 +359,12 @@ server <- function(input, output, session) {
     } 
   })
     
-  
-  
   observeEvent(input$go, {
+    search_terms <- input$search
+    
+  })
+  
+  observeEvent(input$filter, {
     # Update selected tags on button press
     selected_tags(
       lapply(tag_types, function(t) {
@@ -349,6 +390,46 @@ server <- function(input, output, session) {
     
     # Update names of the list to be each of the tag types
     selected_tags(setNames(selected_tags(), tag_types))
+    
+    # Making a local instance for easy reference
+    select_tags <- selected_tags()
+    
+    tmp_catalog <- full_catalog
+    
+    # If tags have been selected, show only the sources for the selected tags
+    if (!is.null(unlist(select_tags))) {
+      # Filter according to each type of tag
+      for (tag_type in names(select_tags)) {
+        if (!is.null(select_tags[[tag_type]])) {
+          # Get user-selected tags for this tag type
+          get_select <- select_tags[[tag_type]]
+          
+          # Remove any entries that don't align with the selected tags'
+          rmv_indices <- c()
+          for (i in 1:nrow(tmp_catalog)) {
+            # Get tags for i-th entry
+            i_tags <- strsplit(tmp_catalog[i,]$Tags, ";")[[1]]
+            i_tags <- trimws(i_tags)
+            # If i-th resource is not of the selected tag types, remove it from catalog
+            if (length(intersect(get_select, i_tags)) == 0) {
+              rmv_indices <- c(rmv_indices, i)
+            } 
+          }
+          tmp_catalog <- tmp_catalog[-rmv_indices,]
+        }
+      }
+    }
+    
+    if (input$sort_by == "Alphabetical") {
+      tmp_catalog <- tmp_catalog[order(tmp_catalog$Name), ]
+    } else if (input$sort_by == "Year: Oldest to Newest") {
+      # tmp <- tmp %>% arrange(Years_Available)
+      tmp_catalog <- tmp_catalog[order(tmp_catalog$Years_Available, na.last=TRUE), ]
+    } else {#if input$sort_by == "Year: Newest to Oldest"
+      tmp_catalog <- tmp_catalog[order(tmp_catalog$Years_Available, na.last=TRUE, decreasing=TRUE), ]
+    }
+    
+    selected_rscs(tmp_catalog)
   })
   
   observeEvent(input$clear, {
@@ -379,39 +460,18 @@ server <- function(input, output, session) {
     
     # Clear the list of selected tags
     selected_tags(list())
+    # Set selected_rscs back to the full catalog
+    selected_rscs(full_catalog)
+    # Reset the sort method to "Alphabetical"
+    updatePickerInput(
+      session,
+      "sort_by",
+      selected = "Alphabetical"
+    )
   })
   
   output$sources_output <- renderUI({
-    # Get the list of selected tags
-    select_tags <- selected_tags()
-    
-    tmp_catalog <<- full_catalog
-    
-    # If tags have been selected, show only the sources for the selected tags
-    if (!is.null(unlist(select_tags))) {
-      # Filter according to each type of tag
-      for (tag_type in names(select_tags)) {
-        if (!is.null(select_tags[[tag_type]])) {
-          # Get user-selected tags for this tag type
-          get_select <- select_tags[[tag_type]]
-
-          # Remove any entries that don't align with the selected tags'
-          rmv_indices <- c()
-          for (i in 1:nrow(tmp_catalog)) {
-            # Get tags for i-th entry
-            i_tags <- strsplit(tmp_catalog[i,]$Tags, ";")[[1]]
-            i_tags <- trimws(i_tags)
-            # If i-th resource is not of the selected tag types, remove it from catalog
-            if (length(intersect(get_select, i_tags)) == 0) {
-              rmv_indices <- c(rmv_indices, i)
-            } 
-          }
-          tmp_catalog <<- tmp_catalog[-rmv_indices,]
-        }
-      }
-      
-      selected_rscs(tmp_catalog)
-    }
+    tmp_catalog <<- selected_rscs()
     
     if (nrow(tmp_catalog) > 0) {
       # Define all the collpase panels for each of the filtered resources
@@ -471,6 +531,21 @@ server <- function(input, output, session) {
       tmp <- tmp[-i]
       shopping_list(tmp)
     })
+  })
+  
+  observeEvent(input$sort_by, {
+    tmp <- selected_rscs()
+    
+    if (input$sort_by == "Alphabetical") {
+      tmp <- tmp[order(tmp$Name, na.last=TRUE), ]
+    } else if (input$sort_by == "Year: Oldest to Newest") {
+      # tmp <- tmp %>% arrange(Years_Available)
+      tmp <- tmp[order(tmp$Years_Available, na.last=TRUE), ]
+    } else {#if input$sort_by == "Year: Newest to Oldest"
+      tmp <- tmp[order(tmp$Years_Available, na.last=TRUE, decreasing=TRUE), ]
+    }
+    
+    selected_rscs(tmp)
   })
   
   
@@ -537,10 +612,6 @@ server <- function(input, output, session) {
     shopping_list(list())
   })
   
-  observeEvent(input$export_to_pdf, {
-    print(shopping_list())
-  })
-  
   observeEvent(input$export_to_csv, {
     if (length(shopping_list()) > 0) {
       col_names <- names(shopping_list()[[names(shopping_list())[1]]])
@@ -555,6 +626,32 @@ server <- function(input, output, session) {
     }
     
   })
+  
+  observeEvent(input$export_to_pdf, {
+    print(shopping_list())
+  })
+  
+  # output$export_to_pdf <- downloadHandler(
+  #   filename = paste0("SavedResourcesReport_SJPCatalog_", Sys.Date(), ".pdf"),
+  #   content = function(file) {
+  #     # # Copy the report file to a temporary directory before processing it, in
+  #     # # case we don't have write permissions to the current working dir (which
+  #     # # can happen when deployed).
+  #     # tmp_report <- file.path(tempdir(), "report.Rmd")
+  #     # file.copy("report.Rmd", tmp_report, overwrite = TRUE)
+  #     # 
+  #     # # Set up parameters to pass to Rmd document
+  #     # params <- list()
+  #     # 
+  #     # # Knit the document, passing in the `params` list, and eval it in a
+  #     # # child of the global environment (this isolates the code in the document
+  #     # # from the code in this app).
+  #     # rmarkdown::render(tempReport, output_file = file,
+  #     #                   params = params,
+  #     #                   envir = new.env(parent = globalenv())
+  #     )
+  #   }
+  # )
   
 
 }

@@ -1,5 +1,7 @@
 # Takes a row from the catalog and generates a string to output in the associated UI card
 gen_rsc_info <- function(resource) {
+  names(resource) <- unlist(lapply(names(resource), function(x) {gsub("_", " ", x)})) #add spaces back to the column names
+  
   info <- ""
   
   ignore_col <- c("Name", "Included Measures", "Tools", "Past Projects", "Notes")
