@@ -1,0 +1,8 @@
+---
+title: Test
+output: pdf_document
+params:
+  n: 0
+---
+
+You have saved params$n resources.
