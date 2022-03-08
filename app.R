@@ -16,6 +16,7 @@ library(plyr)
 library(dplyr)
 library(htmltools)
 library(MITREShiny)
+library(rmarkdown)
 
 
 # suporting functions
@@ -38,7 +39,7 @@ tag_types <- unique(list_of_tags$'Tag Type')
 
 # Define UI for application that draws a histogram
 
-ui <- navbarPage(
+ui <- MITREnavbarPage(
   title = "Social Justice Platform Data Catalog",
   ## Main tab ----
   tabPanel(
@@ -62,7 +63,8 @@ ui <- navbarPage(
             width=3,
             actionButton(
               inputId = "go",
-              label = "Go"
+              label = "Go",
+              class="btn-primary"
             )
           )
         ),
@@ -172,12 +174,14 @@ ui <- navbarPage(
             
             actionButton(
               inputId = "filter",
-              label = "Filter"
+              label = "Filter",
+              class="btn-primary"
             ),
             
             actionButton(
               inputId = "clear",
-              label = "Clear Selections"
+              label = "Clear Selections",
+              class="btn-secondary"
             )
           )
         )
@@ -197,14 +201,34 @@ ui <- navbarPage(
           ),
           "Show per page: ",
           pickerInput(
-            inputId = "sort_by",
+            inputId = "show_per_page",
             label = NULL,
             choices = c(5, 10, 20, "All"),
             selected = 10,
             inline = TRUE
           ),
         ),
-        uiOutput(outputId = "sources_output")
+        uiOutput(outputId = "sources_output"),
+        conditionalPanel(
+          "!output.no_matches",
+          fluidRow(
+            column(
+              width = 12,
+              align = "center",
+              actionButton(
+                inputId = "prev_page",
+                label = icon("angle-left"),
+                class = "btn-secondary"
+              ),
+              uiOutput(outputId = "page_number", inline=TRUE),
+              actionButton(
+                inputId = "next_page",
+                label = icon("angle-right"),
+                class = "btn-secondary"
+              )
+            )
+          )
+        )
       )
     )
   ),
@@ -239,7 +263,8 @@ ui <- navbarPage(
             align = "right",
             actionButton(
               inputId = "clear_cart",
-              label = "Remove All"
+              label = "Remove All",
+              class="btn-danger"
             ),
             dropdownButton(
               inputId = "export",
@@ -305,11 +330,25 @@ server <- function(input, output, session) {
   full_catalog <- full_catalog[order(full_catalog$Name), ]  #start off ordered alphabetically because that's what the default selection is
   colnames(full_catalog) <- unlist(lapply(colnames(full_catalog), function(x) {gsub(" ", "_", x)})) #changing column names so that there are no spaces
   
+  # Current page
+  current_page <- reactiveVal(1)
+  # Total number of pages to view
+  total_pages <- reactiveVal(nrow(full_catalog) %/% 10 + 1)  #default show_per_page=10
+  
+  # Initialize server-side variable that conditional panel can access from UI-side
+  no_matches <- reactiveVal(FALSE)
+  output$no_matches <- eventReactive(no_matches(), {
+    return(no_matches())
+  })
+  outputOptions(output, "no_matches", suspendWhenHidden = FALSE)  #need this to access variable from UI
+  
   # Start with all resources selected
   selected_rscs <- reactiveVal(full_catalog)
   
   # List of saved resources (i.e. shopping cart)
   shopping_list <- reactiveVal(list())
+  
+  
   
   # Toggle the carets on the checkbox menu labels
   lapply(tag_types, function(t) {
@@ -360,8 +399,24 @@ server <- function(input, output, session) {
   })
     
   observeEvent(input$go, {
-    search_terms <- input$search
-    
+    # Look for resources which have any fields that include a partial match to the search term(s)
+    if (input$search != "") {
+      search_terms <- input$search
+      include_terms <- t(matrix(grepl(search_terms, t(full_catalog), ignore.case = TRUE), ncol=nrow(full_catalog)))
+      rsc_index <- unlist(lapply(1:nrow(include_terms), function(i) {any(include_terms[i, ])}))
+      tmp_catalog <- full_catalog[rsc_index, ]
+      
+      if (input$sort_by == "Alphabetical") {
+        tmp_catalog <- tmp_catalog[order(tmp_catalog$Name), ]
+      } else if (input$sort_by == "Year: Oldest to Newest") {
+        # tmp <- tmp %>% arrange(Years_Available)
+        tmp_catalog <- tmp_catalog[order(tmp_catalog$Years_Available, na.last=TRUE), ]
+      } else {#if input$sort_by == "Year: Newest to Oldest"
+        tmp_catalog <- tmp_catalog[order(tmp_catalog$Years_Available, na.last=TRUE, decreasing=TRUE), ]
+      }
+      
+      selected_rscs(tmp_catalog)
+    }
   })
   
   observeEvent(input$filter, {
@@ -430,6 +485,9 @@ server <- function(input, output, session) {
     }
     
     selected_rscs(tmp_catalog)
+    
+    # Reset to first page when filters change
+    current_page(1)
   })
   
   observeEvent(input$clear, {
@@ -468,25 +526,46 @@ server <- function(input, output, session) {
       "sort_by",
       selected = "Alphabetical"
     )
+    
+    # Reset to first page
+    current_page(1)
   })
   
   output$sources_output <- renderUI({
     tmp_catalog <<- selected_rscs()
     
     if (nrow(tmp_catalog) > 0) {
-      # Define all the collpase panels for each of the filtered resources
-      collapseArgs <- lapply(1:nrow(tmp_catalog), function(i) {
+      no_matches(FALSE)
+      
+      # Get resources to be shown on current page
+      if (input$show_per_page != "All") {
+        # Need to recompute how many pages there should be every time output changes
+        total_pages(nrow(selected_rscs()) %/% strtoi(input$show_per_page) + 1)
+        
+        start_i <- (strtoi(input$show_per_page) * (current_page() - 1) + 1)
+        end_i <- min((strtoi(input$show_per_page) * current_page()), nrow(tmp_catalog))
+        indices <- start_i:end_i
+        page_rscs <- tmp_catalog[indices, ]
+        
+      } else {
+        total_pages(1)
+        page_rscs <- tmp_catalog
+      }
+      
+      # Define all the collapse panels for each of the filtered resources
+      collapseArgs <- lapply(1:nrow(page_rscs), function(i) {
         bsCollapsePanel(
-          title = tmp_catalog[i, "Name"],
+          title = page_rscs[i, "Name"],
           value = paste0("rsc_", i),
-          HTML(gen_rsc_info(tmp_catalog[i,])),
+          HTML(gen_rsc_info(page_rscs[i,])),
           fluidRow(
             column(
               width = 12,
               align = "right",
               actionButton(
                 inputId = paste0("add_to_cart_rsc_", i), 
-                label = icon("cart-plus")
+                label = icon("cart-plus"),
+                class = "btn-primary"
               )
             )
           )
@@ -495,11 +574,12 @@ server <- function(input, output, session) {
       
       # Additional bsCollapse arguments
       collapseArgs[["multiple"]] <- TRUE
-      collapseArgs[["open"]] <- unlist(lapply(1:nrow(tmp_catalog), function(i) {paste0("rsc_", i)}))
+      collapseArgs[["open"]] <- unlist(lapply(1:nrow(page_rscs), function(i) {paste0("rsc_", i)}))
       
       do.call(bsCollapse, collapseArgs)
       
     } else {
+      no_matches(TRUE)
       fluidRow(
         column(
           width = 12, 
@@ -511,6 +591,22 @@ server <- function(input, output, session) {
 
   })
   
+  # Display what page user is currently viewing
+  output$page_number <- renderUI({
+    HTML(paste("Page", current_page(), "of", total_pages()))
+  })
+  
+  observeEvent(input$prev_page, {
+    page <- max(1, current_page()-1)
+    current_page(page)
+  })
+  
+  observeEvent(input$next_page, {
+    page <- min(current_page()+1, total_pages())
+    current_page(page)
+  })
+  
+  # Functions for each of the resource-specific buttons
   lapply(1:nrow(full_catalog), function(i) {
     # Individual "Add to Cart" buttons
     observeEvent(input[[paste0("add_to_cart_rsc_", i)]], {
@@ -520,10 +616,11 @@ server <- function(input, output, session) {
       shopping_list(tmp)
     })
     
-    # Individual "Expand" buttons in cart
-    observeEvent(input[[paste0("expand_cart_rsc_", i)]], {
-      
-    })
+    # This functionality is handled in the conditional panel
+    # # Individual "Expand" buttons in cart
+    # observeEvent(input[[paste0("expand_cart_rsc_", i)]], {
+    #   
+    # })
     
     # Individual "Remove from Cart" buttons
     observeEvent(input[[paste0("rmv_cart_rsc_", i)]], {
@@ -536,82 +633,151 @@ server <- function(input, output, session) {
   observeEvent(input$sort_by, {
     tmp <- selected_rscs()
     
+    # Sort the resources output according to user input
     if (input$sort_by == "Alphabetical") {
       tmp <- tmp[order(tmp$Name, na.last=TRUE), ]
     } else if (input$sort_by == "Year: Oldest to Newest") {
-      # tmp <- tmp %>% arrange(Years_Available)
       tmp <- tmp[order(tmp$Years_Available, na.last=TRUE), ]
     } else {#if input$sort_by == "Year: Newest to Oldest"
       tmp <- tmp[order(tmp$Years_Available, na.last=TRUE, decreasing=TRUE), ]
     }
     
     selected_rscs(tmp)
+    
+    # Reset to first page
+    current_page(1)
+  })
+  
+  observeEvent(input$show_per_page, {
+    if (input$show_per_page != "All") {
+      # Compute how many pages there should be based on user input
+      total_pages(nrow(selected_rscs()) %/% strtoi(input$show_per_page) + 1)
+    } else {
+      total_pages(1)
+    }
+    # Go back to first page if changing the number of resources per page
+    current_page(1)
   })
   
   
   output$shopping_cart <- renderUI({
     if (length(shopping_list()) > 0) {
-      lapply(1:length(shopping_list()), function(i) {
-        rsc_name <- names(shopping_list())[i]
-        rsc_info <- shopping_list()[[rsc_name]]
-        rsc_type <- strsplit(rsc_info$Tags, ";")[[1]][1]
-        rsc_url <- rsc_info$Link
-        
-        div(
-          fluidRow(
-            column(
-              width = 4,
-              align = "left",
-              rsc_name
-            ),
-            
-            column(
-              width = 2,
-              align = "left",
-              rsc_type
-            ),
-            
-            column(
-              width = 4,
-              align = "left",
-              HTML("<a href=", rsc_url, ">", rsc_url, "</a>")
-            ),
-            
-            column(
-              width = 2,
-              align = "right",
-              actionButton(
-                inputId = paste0("expand_cart_rsc_", i),
-                label = "Expand"
-              ),
-              actionButton(
-                inputId = paste0("rmv_cart_rsc_", i),
-                label = icon("trash")
-              )
-            )
+      # Headers
+      div(
+        fluidRow(
+          column(
+            width = 4,
+            align = "left",
+            HTML("<b><u>Name</u></b>")
           ),
           
-          fluidRow(
-            column(
-              width = 12,
+          column(
+            width = 2,
+            align = "left",
+            HTML("<b><u>Resource Type</u></b>")
+          ),
+          
+          column(
+            width = 4,
+            align = "left",
+            HTML("<b><u>Link</u></b>")
+          )
+        ),
+        
+        br(),
+        
+        # Generate line items for each of the saved resources
+        lapply(1:length(shopping_list()), function(i) {
+          rsc_name <- names(shopping_list())[i]
+          rsc_info <- shopping_list()[[rsc_name]]
+          rsc_type <- strsplit(rsc_info$Tags, ";")[[1]][1]
+          rsc_url <- rsc_info$Link
+          
+          div(
+            # Basic resource info
+            fluidRow(
+              column(
+                width = 4,
+                align = "left",
+                rsc_name
+              ),
               
-              conditionalPanel(
-                paste0("input.expand_cart_rsc_", i," % 2 == 1"),
-                HTML(gen_rsc_info(rsc_info)),
+              column(
+                width = 2,
+                align = "left",
+                rsc_type
+              ),
+              
+              column(
+                width = 4,
+                align = "left",
+                HTML("<a href=", rsc_url, ">", rsc_url, "</a>")
+              ),
+              
+              # Resource-specific buttons
+              column(
+                width = 2,
+                align = "right",
+                actionButton(
+                  inputId = paste0("expand_cart_rsc_", i),
+                  label = "Expand",
+                  class="btn-secondary"
+                ),
+                actionButton(
+                  inputId = paste0("rmv_cart_rsc_", i),
+                  label = icon("trash"),
+                  class="btn-primary"
+                )
               )
-              
+            ),
+            
+            # More detailed resource info revealed by the Expand button
+            fluidRow(
+              column(
+                width = 12,
+                
+                conditionalPanel(
+                  paste0("input.expand_cart_rsc_", i," % 2 == 1"),
+                  HTML(gen_rsc_info(rsc_info)),
+                )
+                
+              )
             )
           )
-        )
-      })
+        })
+      )
     }
     
   })
   
   observeEvent(input$clear_cart, {
+    # Take user to modal to make sure they actually want to clear their cart
+    showModal(
+      modalDialog(
+        HTML("<p style=\"font-size: 15px\">Are you sure you want to clear your shopping cart? This will remove all saved resources.</p>"),
+        footer = div(
+          align = "center", 
+          actionButton("clear_no", label="No, take me back", class="btn-secondary"),
+          actionButton("clear_yes", label = "Yes, clear cart", class="btn-primary")
+        ),
+        easyClose = FALSE
+      )
+    )
+  })
+  
+  # Changed mind--do nothing
+  observeEvent(input$clear_no, {
+    removeModal()
+  })
+  
+  # Button that will execute clear cart once user has confirmed this is actually what they want
+  observeEvent(input$clear_yes, {
+    removeModal()
     shopping_list(list())
   })
   
+  
+  # Exports a dataframe of all saved resources and their associated fields to a csv
   observeEvent(input$export_to_csv, {
     if (length(shopping_list()) > 0) {
       col_names <- names(shopping_list()[[names(shopping_list())[1]]])
@@ -622,37 +788,51 @@ server <- function(input, output, session) {
         cart_df[nrow(cart_df)+1, ] <- shopping_list()[[n]]
       }
       
-      write.csv(x = cart_df, file = choose.files(default=paste0("SavedResources_SJPCatalog_", Sys.Date(), ".csv"), caption="Save file", multi=FALSE))
+      write.csv(x = cart_df, file = choose.files(default=paste0("SavedResources_SJPCatalog_", format(Sys.time(), "%Y%m%d-%H%M%S"), ".csv"), caption="Save file", multi=FALSE))
+      
+      showModal(
+        modalDialog(
+          HTML("Successfully downloaded a CSV with all saved resources!"),
+          footer = NULL,
+          easyClose = TRUE
+        )
+      )
     }
     
   })
   
+  # Exports a PDF report with the list of saved resources as well as some other info
   observeEvent(input$export_to_pdf, {
-    print(shopping_list())
+    if (length(shopping_list()) > 0) {
+      filename = paste0("SavedResourcesReport_SJPCatalog_", format(Sys.time(), "%Y%m%d-%H%M%S"), ".pdf")
+      
+      tmp_report <- file.path(tempdir(), "report.Rmd")
+      file.copy("www/report.Rmd", tmp_report, overwrite = TRUE)
+      
+      # Set up parameters to pass to Rmd document
+      params <- list(n = length(selected_rscs()))
+      
+      # Knit the document, passing in the `params` list, and eval it in a
+      # child of the global environment (this isolates the code in the document
+      # from the code in this app).
+      rmarkdown::render(
+        tmp_report, 
+        output_file = filename,
+        output_dir = normalizePath("./test"),
+        params = params,
+        envir = new.env(parent = globalenv())
+      )
+      
+      showModal(
+        modalDialog(
+          HTML("Successfully downloaded a report with all saved resources!"),
+          footer = NULL,
+          easyClose = TRUE
+        )
+      )
+    }
   })
-  
-  # output$export_to_pdf <- downloadHandler(
-  #   filename = paste0("SavedResourcesReport_SJPCatalog_", Sys.Date(), ".pdf"),
-  #   content = function(file) {
-  #     # # Copy the report file to a temporary directory before processing it, in
-  #     # # case we don't have write permissions to the current working dir (which
-  #     # # can happen when deployed).
-  #     # tmp_report <- file.path(tempdir(), "report.Rmd")
-  #     # file.copy("report.Rmd", tmp_report, overwrite = TRUE)
-  #     # 
-  #     # # Set up parameters to pass to Rmd document
-  #     # params <- list()
-  #     # 
-  #     # # Knit the document, passing in the `params` list, and eval it in a
-  #     # # child of the global environment (this isolates the code in the document
-  #     # # from the code in this app).
-  #     # rmarkdown::render(tempReport, output_file = file,
-  #     #                   params = params,
-  #     #                   envir = new.env(parent = globalenv())
-  #     )
-  #   }
-  # )
-  
+
 
 }
 
