@@ -360,7 +360,7 @@ server <- function(input, output, session) {
   tables <- catalog$tables
   tools <- catalog$tools
   full_catalog <- rbind.fill(datasets, repos, methods, tables, tools)
-  full_catalog <- full_catalog[order(full_catalog$Name), ]  #start off ordered alphabetically because that's what the default selection is
+  full_catalog <- sort_by_criteria(full_catalog, "Alphabetical") #start off ordered alphabetically because that's what the default selection is
   colnames(full_catalog) <- unlist(lapply(colnames(full_catalog), function(x) {gsub(" ", "_", x)})) #changing column names so that there are no spaces
   
   # Current page
@@ -377,6 +377,9 @@ server <- function(input, output, session) {
   
   # Start with all resources selected
   selected_rscs <- reactiveVal(full_catalog)
+  
+  # Default is to show first 10 resources
+  page_rscs <- reactiveVal(full_catalog[1:10, ])
   
   # List of saved resources (i.e. shopping cart)
   shopping_list <- reactiveVal(list())
@@ -585,19 +588,19 @@ server <- function(input, output, session) {
         start_i <- (strtoi(input$show_per_page) * (current_page() - 1) + 1)
         end_i <- min((strtoi(input$show_per_page) * current_page()), nrow(tmp_catalog))
         indices <- start_i:end_i
-        page_rscs <- tmp_catalog[indices, ]
+        page_rscs(tmp_catalog[indices, ])
         
       } else {
         total_pages(1)
-        page_rscs <- tmp_catalog
+        page_rscs(tmp_catalog)
       }
       
       # Define all the collapse panels for each of the filtered resources
-      collapseArgs <- lapply(1:nrow(page_rscs), function(i) {
+      collapseArgs <- lapply(1:nrow(page_rscs()), function(i) {
         bsCollapsePanel(
-          title = page_rscs[i, "Name"],
+          title = page_rscs()[i, "Name"],
           value = paste0("rsc_", i),
-          HTML(gen_rsc_info(page_rscs[i,])),
+          HTML(gen_rsc_info(page_rscs()[i,])),
           fluidRow(
             column(
               width = 12,
@@ -614,7 +617,7 @@ server <- function(input, output, session) {
       
       # Additional bsCollapse arguments
       collapseArgs[["multiple"]] <- TRUE
-      collapseArgs[["open"]] <- unlist(lapply(1:nrow(page_rscs), function(i) {paste0("rsc_", i)}))
+      collapseArgs[["open"]] <- unlist(lapply(1:nrow(page_rscs()), function(i) {paste0("rsc_", i)}))
       
       do.call(bsCollapse, collapseArgs)
       
@@ -651,16 +654,10 @@ server <- function(input, output, session) {
     # Individual "Add to Cart" buttons
     observeEvent(input[[paste0("add_to_cart_rsc_", i)]], {
       tmp <<- shopping_list()
-      rsc_name <- selected_rscs()[i, "Name"]
-      tmp[[rsc_name]] <<- selected_rscs()[i, ]
+      rsc_name <- page_rscs()[i, "Name"]
+      tmp[[rsc_name]] <<- page_rscs()[i, ]
       shopping_list(tmp)
     })
-    
-    # This functionality is handled in the conditional panel
-    # # Individual "Expand" buttons in cart
-    # observeEvent(input[[paste0("expand_cart_rsc_", i)]], {
-    #   
-    # })
     
     # Individual "Remove from Cart" buttons
     observeEvent(input[[paste0("rmv_cart_rsc_", i)]], {
@@ -727,24 +724,31 @@ server <- function(input, output, session) {
           rsc_type <- strsplit(rsc_info$Tags, ";")[[1]][1]
           rsc_url <- rsc_info$Link
           
+          if (i %% 2 == 1) {
+            bkgd_color <- "#dceafc"
+          } else {
+            bkgd_color <- "#ffffff"
+          }
+          
           div(
             # Basic resource info
             fluidRow(
+              style = paste0("padding-top: 7px; padding-bottom: 7px; margin-top: -2px; border-style: solid; border-width: 1px; border-color: #0D2F4F; background-color: ", bkgd_color),
               column(
                 width = 4,
-                align = "left",
+                style = "padding-top: 5px",
                 rsc_name
               ),
               
               column(
                 width = 2,
-                align = "left",
+                style = "padding-top: 5px",
                 rsc_type
               ),
               
               column(
                 width = 4,
-                align = "left",
+                style = "padding-top: 5px",
                 HTML("<a href=", rsc_url, ">", rsc_url, "</a>")
               ),
               
@@ -772,7 +776,10 @@ server <- function(input, output, session) {
                 
                 conditionalPanel(
                   paste0("input.expand_cart_rsc_", i," % 2 == 1"),
-                  HTML(gen_rsc_info(rsc_info)),
+                  div(
+                    style = "background-color: #f2f2f2",
+                    HTML(gen_rsc_info(rsc_info))
+                  )
                 )
                 
               )
