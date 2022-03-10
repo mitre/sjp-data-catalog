@@ -19,7 +19,9 @@ library(MITREShiny)
 library(rmarkdown)
 
 
-# suporting functions
+# Data and Utility definitions ----
+
+# Suporting functions
 source("utility.R")
 
 # Data folder
@@ -37,8 +39,8 @@ list_of_tags <<- catalog$'list of tags'
 tag_types <- unique(list_of_tags$'Tag Type')
   
 
-# Define UI for application that draws a histogram
 
+# UI ----
 ui <- MITREnavbarPage(
   title = "Social Justice Platform Data Catalog",
   ## Main tab ----
@@ -50,25 +52,19 @@ ui <- MITREnavbarPage(
         width = 3,
         
         h6("Search Keywords"),
-        fluidRow(
-          column(
-            width=9,
-            textInput(
-              inputId = "search",
-              label = NULL,
-              placeholder = "Search"
-            )
-          ),
-          column(
-            width=3,
-            actionButton(
-              inputId = "go",
-              label = "Go",
-              class="btn-primary"
-            )
+        splitLayout(
+          cellWidths = c("85%", "15%"), 
+          textInput(
+            inputId = "search",
+            label = NULL,
+            placeholder = "Search"
+          ), 
+          actionButton(
+            inputId = "go",
+            label = "Go",
+            class="btn-primary"
           )
         ),
-        
         
         hr(),
         
@@ -189,25 +185,55 @@ ui <- MITREnavbarPage(
       
       mainPanel(
         width = 9,
-        div(
-          align = "right",
-          "Sort by: ",
-          pickerInput(
-            inputId = "sort_by",
-            label = NULL,
-            choices = c("Alphabetical", "Year: Oldest to Newest", "Year: Newest to Oldest"),
-            selected = "Alphabetical",
-            inline = TRUE
+        
+        fluidRow(
+          column(
+            width = 6,
+            align = "left",
+            uiOutput(outputId = "num_results")
           ),
-          "Show per page: ",
-          pickerInput(
-            inputId = "show_per_page",
-            label = NULL,
-            choices = c(5, 10, 20, "All"),
-            selected = 10,
-            inline = TRUE
-          ),
+          column(
+            width = 6,
+            align = "right",
+            "Sort by: ",
+            pickerInput(
+              inputId = "sort_by",
+              label = NULL,
+              choices = c("Alphabetical", "Year: Oldest to Newest", "Year: Newest to Oldest"),
+              selected = "Alphabetical",
+              inline = TRUE
+            ),
+            HTML("&nbsp&nbspShow per page: "),
+            pickerInput(
+              inputId = "show_per_page",
+              label = NULL,
+              choices = c(5, 10, 20, "All"),
+              selected = 10,
+              inline = TRUE
+            )
+          )
         ),
+        
+        # div(
+        #   align = "right",
+        #   "Sort by: ",
+        #   pickerInput(
+        #     inputId = "sort_by",
+        #     label = NULL,
+        #     choices = c("Alphabetical", "Year: Oldest to Newest", "Year: Newest to Oldest"),
+        #     selected = "Alphabetical",
+        #     inline = TRUE
+        #   ),
+        #   HTML("&nbsp&nbspShow per page: "),
+        #   pickerInput(
+        #     inputId = "show_per_page",
+        #     label = NULL,
+        #     choices = c(5, 10, 20, "All"),
+        #     selected = 10,
+        #     inline = TRUE
+        #   ),
+        # ),
+        
         uiOutput(outputId = "sources_output"),
         conditionalPanel(
           "!output.no_matches",
@@ -252,57 +278,43 @@ ui <- MITREnavbarPage(
       
       column(
         width = 8,
+        
         fluidRow(
           column(
             width = 6,
-            h2("Saved Resources")
+            div(
+              style = "display: inline-block; padding-top: 8px",
+              h2("Saved Resources")
+            )
           ),
 
           column(
             width = 6,
             align = "right",
-            actionButton(
-              inputId = "clear_cart",
-              label = "Remove All",
-              class="btn-danger"
-            ),
-            dropdownButton(
-              inputId = "export",
-              label = "Export...",
-              circle = FALSE,
-              inline = TRUE,
-              actionLink(
-                inputId = "export_to_csv",
-                label = "To CSV"
+            div(
+              style = "display: inline-block; padding-top: 25px",
+              actionButton(
+                inputId = "clear_cart",
+                label = "Remove All",
+                class="btn-danger"
               ),
-              actionLink(
-                inputId = "export_to_pdf",
-                label = "To PDF"
+              dropdownButton(
+                inputId = "export",
+                label = "Export...",
+                circle = FALSE,
+                inline = TRUE,
+                actionLink(
+                  inputId = "export_to_csv",
+                  label = "To CSV"
+                ),
+                actionLink(
+                  inputId = "export_to_pdf",
+                  label = "To PDF"
+                )
               )
             )
           )
         ),
-        
-        # tags$table(
-        #   width = "100%",
-        #   tags$thead(
-        #     tags$tr(
-        #       tags$th(
-        #         align = "left",
-        #         valign = "bottom",
-        #         h2("Saved Resources")
-        #       ),
-        #       tags$th(
-        #         align = "right",
-        #         valign = "bottom",
-        #         actionButton(
-        #           inputId = "clear_cart",
-        #           label = "Remove All"
-        #         )
-        #       )
-        #     )
-        #   )
-        # ),
         
         hr(),
         
@@ -314,8 +326,29 @@ ui <- MITREnavbarPage(
   )
 )
 
+# Helper functions ----
+get_num_pages <- function(df, per_page) {
+  if (nrow(df) %% per_page == 0) {
+    total_pages <- nrow(df) %/% per_page  #default show_per_page=10
+  } else {
+    total_pages <- nrow(df) %/% per_page + 1  #default show_per_page=10
+  }
+  return(total_pages)
+}
+
+sort_by_criteria <- function(df, criteria) {
+  if (criteria == "Alphabetical") {
+    df <- df[order(df$Name), ]
+  } else if (criteria == "Year: Oldest to Newest") {
+    df <- df[order(df$Years_Available, na.last=TRUE), ]
+  } else {#if criteria == "Year: Newest to Oldest"
+    df <- df[order(df$Years_Available, na.last=TRUE, decreasing=TRUE), ]
+  }
+  return(df)
+}
 
 
+# Server ----
 server <- function(input, output, session) {
   # List of selected tags
   selected_tags <- reactiveVal(list())
@@ -333,7 +366,7 @@ server <- function(input, output, session) {
   # Current page
   current_page <- reactiveVal(1)
   # Total number of pages to view
-  total_pages <- reactiveVal(nrow(full_catalog) %/% 10 + 1)  #default show_per_page=10
+  total_pages <- reactiveVal(get_num_pages(full_catalog, 10))  #default show_per_page=10
   
   # Initialize server-side variable that conditional panel can access from UI-side
   no_matches <- reactiveVal(FALSE)
@@ -349,6 +382,23 @@ server <- function(input, output, session) {
   shopping_list <- reactiveVal(list())
   
   
+  
+  # Display number of total results and which ones are currently being shown
+  output$num_results <- renderUI({
+    if (input$show_per_page == "All") {
+      div(
+        style = 'padding-top: 32px',
+        HTML(paste0("<i>Showing all of ", nrow(selected_rscs())," results</i>"))
+      )
+    } else {
+      start_i <- (strtoi(input$show_per_page) * (current_page() - 1) + 1)
+      end_i <- min((strtoi(input$show_per_page) * current_page()), nrow(selected_rscs()))
+      div(
+        style = 'padding-top: 32px',
+        HTML(paste0("<i>Showing ", start_i,"-", end_i," of ", nrow(selected_rscs())," results</i>"))
+      )
+    }
+  })
   
   # Toggle the carets on the checkbox menu labels
   lapply(tag_types, function(t) {
@@ -405,17 +455,13 @@ server <- function(input, output, session) {
       include_terms <- t(matrix(grepl(search_terms, t(full_catalog), ignore.case = TRUE), ncol=nrow(full_catalog)))
       rsc_index <- unlist(lapply(1:nrow(include_terms), function(i) {any(include_terms[i, ])}))
       tmp_catalog <- full_catalog[rsc_index, ]
-      
-      if (input$sort_by == "Alphabetical") {
-        tmp_catalog <- tmp_catalog[order(tmp_catalog$Name), ]
-      } else if (input$sort_by == "Year: Oldest to Newest") {
-        # tmp <- tmp %>% arrange(Years_Available)
-        tmp_catalog <- tmp_catalog[order(tmp_catalog$Years_Available, na.last=TRUE), ]
-      } else {#if input$sort_by == "Year: Newest to Oldest"
-        tmp_catalog <- tmp_catalog[order(tmp_catalog$Years_Available, na.last=TRUE, decreasing=TRUE), ]
-      }
+
+      tmp_catalog <- sort_by_criteria(tmp_catalog, input$sort_by)
       
       selected_rscs(tmp_catalog)
+      
+      # Reset to first page
+      current_page(1)
     }
   })
   
@@ -475,14 +521,7 @@ server <- function(input, output, session) {
       }
     }
     
-    if (input$sort_by == "Alphabetical") {
-      tmp_catalog <- tmp_catalog[order(tmp_catalog$Name), ]
-    } else if (input$sort_by == "Year: Oldest to Newest") {
-      # tmp <- tmp %>% arrange(Years_Available)
-      tmp_catalog <- tmp_catalog[order(tmp_catalog$Years_Available, na.last=TRUE), ]
-    } else {#if input$sort_by == "Year: Newest to Oldest"
-      tmp_catalog <- tmp_catalog[order(tmp_catalog$Years_Available, na.last=TRUE, decreasing=TRUE), ]
-    }
+    tmp_catalog <- sort_by_criteria(tmp_catalog, input$sort_by)
     
     selected_rscs(tmp_catalog)
     
@@ -516,16 +555,17 @@ server <- function(input, output, session) {
       }
     }
     
+    # Reset the search bar
+    updateTextInput(
+      session,
+      inputId = "search",
+      value = ""
+    )
+    
     # Clear the list of selected tags
     selected_tags(list())
     # Set selected_rscs back to the full catalog
-    selected_rscs(full_catalog)
-    # Reset the sort method to "Alphabetical"
-    updatePickerInput(
-      session,
-      "sort_by",
-      selected = "Alphabetical"
-    )
+    selected_rscs(sort_by_criteria(full_catalog, input$sort_by))
     
     # Reset to first page
     current_page(1)
@@ -540,7 +580,7 @@ server <- function(input, output, session) {
       # Get resources to be shown on current page
       if (input$show_per_page != "All") {
         # Need to recompute how many pages there should be every time output changes
-        total_pages(nrow(selected_rscs()) %/% strtoi(input$show_per_page) + 1)
+        total_pages(get_num_pages(selected_rscs(), strtoi(input$show_per_page)))
         
         start_i <- (strtoi(input$show_per_page) * (current_page() - 1) + 1)
         end_i <- min((strtoi(input$show_per_page) * current_page()), nrow(tmp_catalog))
@@ -634,13 +674,7 @@ server <- function(input, output, session) {
     tmp <- selected_rscs()
     
     # Sort the resources output according to user input
-    if (input$sort_by == "Alphabetical") {
-      tmp <- tmp[order(tmp$Name, na.last=TRUE), ]
-    } else if (input$sort_by == "Year: Oldest to Newest") {
-      tmp <- tmp[order(tmp$Years_Available, na.last=TRUE), ]
-    } else {#if input$sort_by == "Year: Newest to Oldest"
-      tmp <- tmp[order(tmp$Years_Available, na.last=TRUE, decreasing=TRUE), ]
-    }
+    tmp <- sort_by_criteria(tmp, input$sort_by)
     
     selected_rscs(tmp)
     
@@ -651,7 +685,7 @@ server <- function(input, output, session) {
   observeEvent(input$show_per_page, {
     if (input$show_per_page != "All") {
       # Compute how many pages there should be based on user input
-      total_pages(nrow(selected_rscs()) %/% strtoi(input$show_per_page) + 1)
+      total_pages(get_num_pages(selected_rscs(), strtoi(input$show_per_page)))
     } else {
       total_pages(1)
     }
@@ -746,6 +780,14 @@ server <- function(input, output, session) {
           )
         })
       )
+    } else {
+      fluidRow(
+        column(
+          width = 12, 
+          align = "center",
+          HTML("<br><i>Your shopping cart is currently empty.</i>")
+        )
+      )
     }
     
   })
@@ -797,8 +839,7 @@ server <- function(input, output, session) {
           easyClose = TRUE
         )
       )
-    }
-    
+    } 
   })
   
   # Exports a PDF report with the list of saved resources as well as some other info
