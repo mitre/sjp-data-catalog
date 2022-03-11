@@ -45,7 +45,7 @@ ui <- MITREnavbarPage(
   title = "Social Justice Platform Data Catalog",
   ## Main tab ----
   tabPanel(
-    "Resources",
+    "Search Catalog",
     
     sidebarLayout(
       sidebarPanel(
@@ -85,7 +85,7 @@ ui <- MITREnavbarPage(
             
             # Show/hide the info within each tag type
             conditionalPanel(
-              paste0("input.label_", gsub(" ", "_", t)," % 2 == 1"),
+              condition = paste0("input.label_", gsub(" ", "_", t)," % 2 == 1"),
               
               if (all(is.na(subcats))) {
                 # If there are no subcategories, just show the checkbox group
@@ -115,7 +115,7 @@ ui <- MITREnavbarPage(
                           icon("caret-right")
                         ),
                         conditionalPanel(
-                          paste0("input.label_", gsub(" ", "_", t), "_Other", " % 2 == 1"),
+                          condition = paste0("input.label_", gsub(" ", "_", t), "_Other", " % 2 == 1"),
                           div(
                             style = 'padding: 5px 0px 0px 1em',
                             checkboxGroupInput(
@@ -138,7 +138,7 @@ ui <- MITREnavbarPage(
                           icon("caret-right")
                         ),
                         conditionalPanel(
-                          paste0("input.label_", gsub(" ", "_", t), "_", gsub(" ", "_", s), " % 2 == 1"),
+                          condition = paste0("input.label_", gsub(" ", "_", t), "_", gsub(" ", "_", s), " % 2 == 1"),
                           div(
                             style = 'padding: 5px 0px 0px 1em',
                             checkboxGroupInput(
@@ -236,7 +236,7 @@ ui <- MITREnavbarPage(
         
         uiOutput(outputId = "sources_output"),
         conditionalPanel(
-          "!output.no_matches",
+          condition = "!output.no_matches",
           fluidRow(
             column(
               width = 12,
@@ -271,7 +271,7 @@ ui <- MITREnavbarPage(
   
   ## Shopping cart
   tabPanel(
-    "Shopping Cart",
+    "Saved Resources",
     
     fluidRow(
       column(width = 2),
@@ -602,15 +602,38 @@ server <- function(input, output, session) {
           value = paste0("rsc_", i),
           HTML(gen_rsc_info(page_rscs()[i,])),
           fluidRow(
+            # style = "border-style: solid",
             column(
-              width = 12,
+              width = 6,
+              align = 'left',
+              style = "padding-top: 1em; margin-bottom: -1em;",
+              materialSwitch(
+                inputId = paste0('show_more_rscs_', i),
+                label = NULL,
+                value = FALSE,
+                status = "primary",
+                inline = TRUE,
+              ),
+              "Show me similar resources"
+            ),
+            
+            column(
+              width = 6,
               align = "right",
               actionButton(
                 inputId = paste0("add_to_cart_rsc_", i), 
-                label = icon("cart-plus"),
+                label = "Save",
+                icon = icon("heart"),
                 class = "btn-primary"
               )
             )
+          ),
+          conditionalPanel(
+            condition = paste0("input.show_more_rscs_", i),
+            br(),
+            "Placeholder for resource recommendations",
+            # uiOutput(outputId = paste0("rsc_recs_", i)),
+            br()
           )
         )
       })
@@ -651,7 +674,28 @@ server <- function(input, output, session) {
   
   # Functions for each of the resource-specific buttons
   lapply(1:nrow(full_catalog), function(i) {
-    # Individual "Add to Cart" buttons
+    # Show source recommendations
+    output[[paste0("rsc_recs_", i)]] <- renderUI({
+      fluidRow(
+        column(
+          width = 4,
+          style = "padding: 10px; background-color: #ffffff; border-radius: 5px; border-style: solid; border-width: 1px; border-color: #000000",
+          "Resource Rec 1"
+        ),
+        column(
+          width = 4,
+          style = "padding: 10px; background-color: #ffffff; border-radius: 5px; border-style: solid; border-width: 1px; border-color: #000000",
+          "Resource Rec 2"
+        ),
+        column(
+          width = 4,
+          style = "padding: 10px; background-color: #ffffff; border-radius: 5px; border-style: solid; border-width: 1px; border-color: #000000",
+          "Resource Rec 3"
+        )
+      )
+    })
+    
+    # "Save" buttons
     observeEvent(input[[paste0("add_to_cart_rsc_", i)]], {
       tmp <<- shopping_list()
       rsc_name <- page_rscs()[i, "Name"]
@@ -659,7 +703,7 @@ server <- function(input, output, session) {
       shopping_list(tmp)
     })
     
-    # Individual "Remove from Cart" buttons
+    # "Remove from Cart" buttons
     observeEvent(input[[paste0("rmv_cart_rsc_", i)]], {
       tmp <- shopping_list()
       tmp <- tmp[-i]
@@ -695,28 +739,6 @@ server <- function(input, output, session) {
     if (length(shopping_list()) > 0) {
       # Headers
       div(
-        fluidRow(
-          column(
-            width = 4,
-            align = "left",
-            HTML("<b><u>Name</u></b>")
-          ),
-          
-          column(
-            width = 2,
-            align = "left",
-            HTML("<b><u>Resource Type</u></b>")
-          ),
-          
-          column(
-            width = 4,
-            align = "left",
-            HTML("<b><u>Link</u></b>")
-          )
-        ),
-        
-        br(),
-        
         # Generate line items for each of the saved resources
         lapply(1:length(shopping_list()), function(i) {
           rsc_name <- names(shopping_list())[i]
@@ -724,16 +746,22 @@ server <- function(input, output, session) {
           rsc_type <- strsplit(rsc_info$Tags, ";")[[1]][1]
           rsc_url <- rsc_info$Link
           
-          if (i %% 2 == 1) {
-            bkgd_color <- "#dceafc"
-          } else {
-            bkgd_color <- "#ffffff"
-          }
+          # if (i %% 2 == 1) {
+          #   bkgd_color <- "#dceafc"
+          # } else {
+          #   bkgd_color <- "#ffffff"
+          # }
+          
+          # bord_color <- "#0D2F4F"  #MITRE navy blue
+          
+          bkgd_color <- "#f0f7ff"
+          bord_color <- "#005B94"  #MITRE blue
+          # bord_color <- "#bfddff"
           
           div(
             # Basic resource info
             fluidRow(
-              style = paste0("padding-top: 7px; padding-bottom: 7px; margin-top: -2px; border-style: solid; border-width: 1px; border-color: #0D2F4F; background-color: ", bkgd_color),
+              style = paste0("padding-top: 7px; padding-bottom: 7px; margin-top: 2px; border-radius: 5px; border-style: solid; border-width: 1px; border-color: ", bord_color, "; background-color: ", bkgd_color),
               column(
                 width = 4,
                 style = "padding-top: 5px",
@@ -775,11 +803,9 @@ server <- function(input, output, session) {
                 width = 12,
                 
                 conditionalPanel(
-                  paste0("input.expand_cart_rsc_", i," % 2 == 1"),
-                  div(
-                    style = "background-color: #f2f2f2",
-                    HTML(gen_rsc_info(rsc_info))
-                  )
+                  condition = paste0("input.expand_cart_rsc_", i," % 2 == 1"),
+                  style = paste0("padding: 10px; background-color: #ffffff; margin: -0.25em -1.1em 0px -1.1em; border-radius: 0px 0px 5px 5px; border-style: solid; border-width: 1px; border-color: ", bord_color),
+                  HTML(gen_rsc_info(rsc_info))
                 )
                 
               )
@@ -792,7 +818,7 @@ server <- function(input, output, session) {
         column(
           width = 12, 
           align = "center",
-          HTML("<br><i>Your shopping cart is currently empty.</i>")
+          HTML("<br><i>Your currently have no saved resources.</i>")
         )
       )
     }
@@ -800,18 +826,20 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$clear_cart, {
-    # Take user to modal to make sure they actually want to clear their cart
-    showModal(
-      modalDialog(
-        HTML("<p style=\"font-size: 15px\">Are you sure you want to clear your shopping cart? This will remove all saved resources.</p>"),
-        footer = div(
-          align = "center", 
-          actionButton("clear_no", label="No, take me back", class="btn-secondary"),
-          actionButton("clear_yes", label = "Yes, clear cart", class="btn-primary")
-        ),
-        easyClose = FALSE
+    if (length(shopping_list()) > 0) {
+      # Take user to modal to make sure they actually want to clear their cart
+      showModal(
+        modalDialog(
+          HTML("<p style=\"font-size: 15px\">Are you sure you want to clear your list? This will remove all saved resources.</p>"),
+          footer = div(
+            align = "center", 
+            actionButton("clear_no", label="No, take me back", class="btn-secondary"),
+            actionButton("clear_yes", label = "Yes, clear all", class="btn-primary")
+          ),
+          easyClose = FALSE
+        )
       )
-    )
+    }
   })
   
   # Changed mind--do nothing
