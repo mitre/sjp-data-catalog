@@ -120,4 +120,57 @@ shared_features <- function(catalog_features, count="tags", total_tags=0, total_
   return(num_shared)
 }
 
+# Computes all the different similarity-related values in one loop
+get_all_sims <- function(catalog_features, sim_measure, total_tags, total_methods) {
+  sim <- data.frame(matrix(nrow = nrow(catalog_features), ncol = nrow(catalog_features)))
+  colnames(sim) <- rownames(catalog_features)
+  rownames(sim) <- rownames(catalog_features)
+  
+  tags_shared <- data.frame(matrix(nrow = nrow(catalog_features), ncol = nrow(catalog_features)))
+  colnames(tags_shared) <- rownames(catalog_features)
+  rownames(tags_shared) <- rownames(catalog_features)
+  
+  methods_shared <- data.frame(matrix(nrow = nrow(catalog_features), ncol = nrow(catalog_features)))
+  colnames(methods_shared) <- rownames(catalog_features)
+  rownames(methods_shared) <- rownames(catalog_features)
+  
+  for (i in 1:(nrow(catalog_features)-1)) {
+    i_feat <- as.numeric(as.vector(catalog_features[i, ]))
+    for (j in (i+1):nrow(catalog_features)) {
+      j_feat <- as.numeric(as.vector(catalog_features[j, ]))
+      
+      # Similarity metric
+      if (sim_measure == "cosine") {
+        sim_ij <- cosine(i_feat, j_feat)
+      } else {#if sim_measure == "euclidean"
+        sim_ij <- 1 / (1 + euclidean(i_feat, j_feat))  #sim measure based on Euclidean dist
+      }
+      
+      sim[i, j] <- sim_ij
+      sim[j, i] <- sim_ij
+      
+      # Number of shared tags
+      tag_overlap <- i_feat[1:total_tags] + j_feat[1:total_tags] #Tags take up the first n_tags features in the vectors
+      
+      tags_ij <- sum(tag_overlap == 2)
+      tags_shared[i, j] <- tags_ij
+      tags_shared[j, i] <- tags_ij
+      
+      # Number of shared methodologies
+      method_overlap <- i_feat[(length(i_feat) - total_methods + 1):length(i_feat)] + j_feat[(length(j_feat) - total_methods + 1):length(j_feat)] #Methodologies take up the last n_methods features in the vectors
+      
+      methods_ij <- sum(overlap == 2)
+      methods_shared[i, j] <- methods_ij
+      methods_shared[j, i] <- methods_ij
+    }
+  }
+  
+  out <- list()
+  out$sim_matrix <- sim
+  out$tags <- shared_tags
+  out$methods <- shared_methods
+  
+  return(out)
+}
+
 

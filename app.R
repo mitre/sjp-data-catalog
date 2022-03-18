@@ -45,6 +45,11 @@ names(catalog) <<- sheet_names
 list_of_tags <<- catalog$'list of tags'
 tag_types <- unique(list_of_tags$'Tag Type')
 
+# KCJ: need to pull these values out of the data
+# Get min and max years across catalog
+min_year <- 1968
+max_year <- 2022
+
   
 
 
@@ -62,17 +67,7 @@ ui <- MITREnavbarPage(
         h6("Search Keywords"),
         splitLayout(
           cellWidths = c("85%", "15%"), 
-          # Example of search bar recommendations (library shinysky not compatible with current R version)
-          # textInput.typeahead(
-          #   id="thti"
-          #   ,placeholder="type 'name' or '2'"
-          #   ,local=data.frame(name=c("name1","name2"),info=c("info1","info2"))
-          #   ,valueKey = "name"
-          #   ,tokens=c(1,2)
-          #   ,template = HTML("<p class='repo-language'>{{info}}</p> 
-          #   <p class='repo-name'>{{name}}</p> 
-          #   <p class='repo-description'>You need to learn more CSS to customize this further</p>")
-          # ),
+
           textInput(
             inputId = "search",
             label = NULL,
@@ -180,6 +175,34 @@ ui <- MITREnavbarPage(
           )
         }),
         
+        hr(),
+        
+        h6("Filter by Year"),
+        
+        sliderInput(
+          inputId = "filter_year", 
+          label = NULL, 
+          sep = "",
+          min = min_year, 
+          max = max_year, 
+          value = c(min_year, max_year)
+        ),
+        
+        hr(),
+        
+        h6("Filter by Geographic Level"),
+        div(
+          style = 'padding-top: 5px',
+          checkboxGroupInput(
+            inputId = "filter_geo_lvls",
+            label = NULL,
+            selected = NULL,
+            #KCJ: need to pull these values from data
+            choiceNames = c("National", "State", "County", "City", "Census Tract"),
+            choiceValues = c("National", "State", "County", "City", "Census Tract")
+          )
+        ),
+        
         fluidRow(
           column(
             width = 12,
@@ -232,26 +255,6 @@ ui <- MITREnavbarPage(
             )
           )
         ),
-        
-        # div(
-        #   align = "right",
-        #   "Sort by: ",
-        #   pickerInput(
-        #     inputId = "sort_by",
-        #     label = NULL,
-        #     choices = c("Alphabetical", "Year: Oldest to Newest", "Year: Newest to Oldest"),
-        #     selected = "Alphabetical",
-        #     inline = TRUE
-        #   ),
-        #   HTML("&nbsp&nbspShow per page: "),
-        #   pickerInput(
-        #     inputId = "show_per_page",
-        #     label = NULL,
-        #     choices = c(5, 10, 20, "All"),
-        #     selected = 10,
-        #     inline = TRUE
-        #   ),
-        # ),
         
         uiOutput(outputId = "sources_output"),
         conditionalPanel(
@@ -382,16 +385,36 @@ server <- function(input, output, session) {
   full_catalog <- sort_by_criteria(full_catalog, "Alphabetical") #start off ordered alphabetically because that's what the default selection is
   colnames(full_catalog) <- unlist(lapply(colnames(full_catalog), function(x) {gsub(" ", "_", x)})) #changing column names so that there are no spaces
   
-  # Similarity matrix between all resources
+  # Generate features vectors and compute all similarity values
   catalog_features <<- feature_vectors(full_catalog, list_of_tags$Tags, catalog$`methodology--data`)
-  rsc_sim <<- sim_matrix(catalog_features, sim_measure="cosine")
+  all_sim_values <- get_all_sims(catalog_features, sim_measure="cosine", total_tags=length(list_of_tags$Tags), total_methods=nrow(tmp_catalog[grepl("Methodology", tmp_catalog$Tags), ]))
   
+  # Similarity matrix between all resources
+  rsc_sim <<- all_sim_values$sim_matrix
   all_sims <- rsc_sim[lower.tri(rsc_sim)]
   # sim_thresh <- quantile(all_sims)[["75%"]]
   sim_thresh <- mean(all_sims) + 2 * sd(all_sims)
   
-  shared_tags <<- shared_features(catalog_features, "tags", total_tags=length(list_of_tags$Tags))
-  shared_methods <<- shared_features(catalog_features, "methodologies", total_methods=nrow(tmp_catalog[grepl("Methodology", tmp_catalog$Tags), ]))
+  # Number of shared tags and methodologies
+  shared_tags <<- all_sim_values$tags
+  shared_methods <<- all_sim_values$methods
+  
+  # Get most similar resources (i.e. all with similarity greater than pre-set threshold)
+  all_rsc_recs <- list()
+  num_recs <- c()
+  for (i in 1:nrow(full_catalog)) {
+    rsc_name <- full_catalog[i, "Name"]
+    recs <- c(rsc_sim[rsc_name, ])[order(-unlist(rsc_sim[rsc_name, ]))]
+    n_recs_show <- sum(recs > sim_thresh, na.rm=TRUE)
+    if (n_recs_show == 0) {
+      all_rsc_recs[[rsc_name]] <- c()
+      num_recs <- c(num_recs, 0)
+    } else {
+      all_rsc_recs[[rsc_name]] <- recs[1:n_recs_show]
+      num_recs <- c(num_recs, n_recs_show)
+    }
+  }
+  max_num_recs <- max(num_recs) #for generating buttons in the server
   
   # Current page
   current_page <- reactiveVal(1)
@@ -708,15 +731,13 @@ server <- function(input, output, session) {
     output[[paste0("rsc_recs_", i)]] <- renderUI({
       # Get most similar resources (i.e. all with similarity greater than pre-set threshold)
       rsc_name <- page_rscs()[i, "Name"]
-      recs <- c(rsc_sim[rsc_name, ])[order(-unlist(rsc_sim[rsc_name, ]))]
-      n_recs_show <- sum(recs > sim_thresh, na.rm=TRUE)
-      recs <- recs[1:n_recs_show]
+      recs <- all_rsc_recs[[rsc_name]]
       
       # Colors for displaying the recommended source boxes
       bkgd_color <- "#f0f7ff"
       bord_color <- "#005B94"  #MITRE blue
       
-      if (n_recs_show == 0) {
+      if (is.null(recs)) {
         # Let user know if there are no sources to recommend
         HTML("<i>No recommended resources to show.</i>")
         
@@ -756,8 +777,6 @@ server <- function(input, output, session) {
                 HTML(disp_str)
               )
             ),
-            # br(),
-            # br(),
             fluidRow(
               style = "position: absolute; bottom: 10px; right: 10px;",
               column(
@@ -781,6 +800,25 @@ server <- function(input, output, session) {
           )
         )
       }
+    })
+    
+    # Buttons of resource recs 
+    lapply(1:max_num_recs, function(j) {
+      # See full resource info for rec
+      observeEvent(input[[paste0("go_to_rec_", i, j)]], {
+        
+      })
+      
+      # Save the rec
+      observeEvent(input[[paste0("save_rec_", i, j)]], {
+        rsc_name <- page_rscs()[i, "Name"]
+        recs <- all_rsc_recs[[rsc_name]]
+        
+        tmp <<- shopping_list()
+        rec_name <- names(recs[j])
+        tmp[[rec_name]] <<- full_catalog[full_catalog["Name"] == rec_name, ]
+        shopping_list(tmp)
+      })
     })
     
     # "Save" buttons
@@ -834,15 +872,7 @@ server <- function(input, output, session) {
           rsc_type <- strsplit(rsc_info$Tags, ";")[[1]][1]
           rsc_url <- rsc_info$Link
           
-          # if (i %% 2 == 1) {
-          #   bkgd_color <- "#dceafc"
-          # } else {
-          #   bkgd_color <- "#ffffff"
-          # }
-          
-          # bord_color <- "#0D2F4F"  #MITRE navy blue
-          
-          bkgd_color <- "#f0f7ff"
+          bkgd_color <- "#f0f7ff"  #light blue
           bord_color <- "#005B94"  #MITRE blue
           # bord_color <- "#bfddff"
           
