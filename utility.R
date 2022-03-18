@@ -1,3 +1,5 @@
+library(lsa)
+
 # Takes a row from the catalog and generates a string to output in the associated UI card
 gen_rsc_info <- function(resource) {
   names(resource) <- unlist(lapply(names(resource), function(x) {gsub("_", " ", x)})) #add spaces back to the column names
@@ -18,3 +20,104 @@ gen_rsc_info <- function(resource) {
   
   return(info)
 }
+
+# Generate features vectors for each of the resources to pass to the similarity measure
+feature_vectors <- function(catalog, tags_list, methods_data) {
+  # List of all methodology names
+  method_names <- catalog[grepl("Methodology", catalog$Tags), "Name"]
+  
+  # features <- c(tags_list, method_names)
+  features <- c(tags_list)
+  
+  rsc_feats <- data.frame(matrix(nrow = nrow(catalog), ncol = length(features)))
+  colnames(rsc_feats) <- features
+  rownames(rsc_feats) <- catalog$Name
+  
+  for (i in 1:nrow(catalog)) {
+    # 1 = rsc contains tag t, 0 = otherwise
+    for (t in tags_list) {
+      if (grepl(t, catalog[i, "Tags"])) {
+        rsc_feats[i, t] = 1
+      } else {
+        rsc_feats[i, t] = 0
+      }
+    }
+    
+    # 1 = rsc used in methodology m, 0 = otherwise
+    in_methods <- methods_data[methods_data["Dataset Name"] == catalog[i, "Name"], ][["Methodology Name"]]
+    for (m in method_names) {
+      if (m %in% in_methods) {
+        rsc_feats[i, m] = 1
+      } else {
+        rsc_feats[i, m] = 0
+      }
+    }
+  }
+  
+  return(rsc_feats)
+}
+
+# Compute Euclidean distance between two vectors
+euclidean <- function(x, y) {
+  sqrt(sum((x - y)^2))
+}
+
+# Generates a similarity matrix between all combinations of resources
+# sim_matrix <- function(catalog, tags_list, methods_data, sim_measure="cosine") {
+#   cat_feat_vects <- feat_vectors(catalog, tags_list, methods_data)
+
+sim_matrix <- function(catalog_features, sim_measure="cosine") {
+  sim <- data.frame(matrix(nrow = nrow(catalog_features), ncol = nrow(catalog_features)))
+  colnames(sim) <- rownames(catalog_features)
+  rownames(sim) <- rownames(catalog_features)
+  
+  for (i in 1:(nrow(catalog_features)-1)) {
+    i_feat <- as.numeric(as.vector(catalog_features[i, ]))
+    for (j in (i+1):nrow(catalog_features)) {
+      j_feat <- as.numeric(as.vector(catalog_features[j, ]))
+      
+      if (sim_measure == "cosine") {
+        sim_ij <- cosine(i_feat, j_feat)
+      } else {#if sim_measure == "euclidean"
+        sim_ij <- 1 / (1 + euclidean(i_feat, j_feat))  #sim measure based on Euclidean dist
+      }
+      
+      sim[i, j] <- sim_ij
+      sim[j, i] <- sim_ij
+    }
+  }
+  
+  return(sim)
+}
+
+# Number of shared features between each pair of resources
+# This function needs to know where to parse the features vectors based on what shared elements you are counting.
+# In order to do this, you need to pass to the function the total number of tags/methodologies available.
+shared_features <- function(catalog_features, count="tags", total_tags=0, total_methods=0) {
+  num_shared <- data.frame(matrix(nrow = nrow(catalog_features), ncol = nrow(catalog_features)))
+  colnames(num_shared) <- rownames(catalog_features)
+  rownames(num_shared) <- rownames(catalog_features)
+  
+  for (i in 1:(nrow(catalog_features)-1)) {
+    i_feat <- as.numeric(as.vector(catalog_features[i, ]))
+    for (j in (i+1):nrow(catalog_features)) {
+      j_feat <- as.numeric(as.vector(catalog_features[j, ]))
+      
+      if (count == "tags") {
+        # Tags take up the first n_tags features in the vectors
+        overlap <- i_feat[1:total_tags] + j_feat[1:total_tags]
+      } else {#count == "methodologies"
+        # Methodologies take up the last n_methods features in the vectors
+        overlap <- i_feat[(length(i_feat) - total_methods + 1):length(i_feat)] + j_feat[(length(j_feat) - total_methods + 1):length(j_feat)]
+      }
+      
+      shared_ij <- sum(overlap == 2)
+      num_shared[i, j] <- shared_ij
+      num_shared[j, i] <- shared_ij
+    }
+  }
+  
+  return(num_shared)
+}
+
+

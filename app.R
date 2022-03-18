@@ -17,6 +17,7 @@ library(dplyr)
 library(htmltools)
 library(MITREShiny)
 library(rmarkdown)
+# library(shinysky)
 
 
 # Data and Utility definitions ----
@@ -32,11 +33,18 @@ data_folder <- file.path(
 # Catalog data
 path_to_catalog <- file.path(data_folder, "sjp_data_catalog.xlsx")
 sheet_names <- excel_sheets(path_to_catalog)
-catalog <- lapply(sheet_names, function(X) read_excel(path_to_catalog, sheet = X))
-names(catalog) <- sheet_names
+ignore_sheets <- c("guidelines", "Copewell Indicators", "to review", "mitch_milestone_goals") #sheets to ignore
+catalog <<- lapply(sheet_names, function(X) {
+    if (!(X %in% ignore_sheets)) {
+      read_excel(path_to_catalog, sheet = X) 
+    }
+  })
+names(catalog) <<- sheet_names
 
+# Tags info
 list_of_tags <<- catalog$'list of tags'
 tag_types <- unique(list_of_tags$'Tag Type')
+
   
 
 
@@ -54,11 +62,22 @@ ui <- MITREnavbarPage(
         h6("Search Keywords"),
         splitLayout(
           cellWidths = c("85%", "15%"), 
+          # Example of search bar recommendations (library shinysky not compatible with current R version)
+          # textInput.typeahead(
+          #   id="thti"
+          #   ,placeholder="type 'name' or '2'"
+          #   ,local=data.frame(name=c("name1","name2"),info=c("info1","info2"))
+          #   ,valueKey = "name"
+          #   ,tokens=c(1,2)
+          #   ,template = HTML("<p class='repo-language'>{{info}}</p> 
+          #   <p class='repo-name'>{{name}}</p> 
+          #   <p class='repo-description'>You need to learn more CSS to customize this further</p>")
+          # ),
           textInput(
             inputId = "search",
             label = NULL,
-            placeholder = "Search"
-          ), 
+            placeholder = "Search",
+          ),
           actionButton(
             inputId = "go",
             label = "Go",
@@ -363,6 +382,17 @@ server <- function(input, output, session) {
   full_catalog <- sort_by_criteria(full_catalog, "Alphabetical") #start off ordered alphabetically because that's what the default selection is
   colnames(full_catalog) <- unlist(lapply(colnames(full_catalog), function(x) {gsub(" ", "_", x)})) #changing column names so that there are no spaces
   
+  # Similarity matrix between all resources
+  catalog_features <<- feature_vectors(full_catalog, list_of_tags$Tags, catalog$`methodology--data`)
+  rsc_sim <<- sim_matrix(catalog_features, sim_measure="cosine")
+  
+  all_sims <- rsc_sim[lower.tri(rsc_sim)]
+  # sim_thresh <- quantile(all_sims)[["75%"]]
+  sim_thresh <- mean(all_sims) + 2 * sd(all_sims)
+  
+  shared_tags <<- shared_features(catalog_features, "tags", total_tags=length(list_of_tags$Tags))
+  shared_methods <<- shared_features(catalog_features, "methodologies", total_methods=nrow(tmp_catalog[grepl("Methodology", tmp_catalog$Tags), ]))
+  
   # Current page
   current_page <- reactiveVal(1)
   # Total number of pages to view
@@ -602,7 +632,6 @@ server <- function(input, output, session) {
           value = paste0("rsc_", i),
           HTML(gen_rsc_info(page_rscs()[i,])),
           fluidRow(
-            # style = "border-style: solid",
             column(
               width = 6,
               align = 'left',
@@ -631,8 +660,8 @@ server <- function(input, output, session) {
           conditionalPanel(
             condition = paste0("input.show_more_rscs_", i),
             br(),
-            "Placeholder for resource recommendations",
-            # uiOutput(outputId = paste0("rsc_recs_", i)),
+            # "Placeholder for resource recommendations",
+            uiOutput(outputId = paste0("rsc_recs_", i)),
             br()
           )
         )
@@ -673,26 +702,85 @@ server <- function(input, output, session) {
   })
   
   # Functions for each of the resource-specific buttons
+  # Need to apply function up to nrow(full_catalog) because can't access length of selected_rscs() outside of render/observe
   lapply(1:nrow(full_catalog), function(i) {
     # Show source recommendations
     output[[paste0("rsc_recs_", i)]] <- renderUI({
-      fluidRow(
-        column(
-          width = 4,
-          style = "padding: 10px; background-color: #ffffff; border-radius: 5px; border-style: solid; border-width: 1px; border-color: #000000",
-          "Resource Rec 1"
-        ),
-        column(
-          width = 4,
-          style = "padding: 10px; background-color: #ffffff; border-radius: 5px; border-style: solid; border-width: 1px; border-color: #000000",
-          "Resource Rec 2"
-        ),
-        column(
-          width = 4,
-          style = "padding: 10px; background-color: #ffffff; border-radius: 5px; border-style: solid; border-width: 1px; border-color: #000000",
-          "Resource Rec 3"
+      # Get most similar resources (i.e. all with similarity greater than pre-set threshold)
+      rsc_name <- page_rscs()[i, "Name"]
+      recs <- c(rsc_sim[rsc_name, ])[order(-unlist(rsc_sim[rsc_name, ]))]
+      n_recs_show <- sum(recs > sim_thresh, na.rm=TRUE)
+      recs <- recs[1:n_recs_show]
+      
+      # Colors for displaying the recommended source boxes
+      bkgd_color <- "#f0f7ff"
+      bord_color <- "#005B94"  #MITRE blue
+      
+      if (n_recs_show == 0) {
+        # Let user know if there are no sources to recommend
+        HTML("<i>No recommended resources to show.</i>")
+        
+      } else {
+        # Create a horizontal scrolling div with all recommended resources
+        recs_list <- lapply(1:length(recs), function(j) {
+          n_shared_tags <- shared_tags[rsc_name, names(recs[j])]
+          n_shared_methods <- shared_methods[rsc_name, names(recs[j])]
+          
+          desc <- full_catalog[full_catalog["Name"] == names(recs[j]), ][["Description"]]
+          disp_str <- paste0("<b>", names(recs[j]), "</b><p style='width: 375px; overflow:hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical;'>", desc, "</p><p>")
+          
+          if (n_shared_tags > 0) {
+            if (n_shared_tags == 1) {
+              disp_str <- paste0(disp_str, n_shared_tags, " shared tag; ")
+            } else {
+              disp_str <- paste0(disp_str, n_shared_tags, " shared tags; ")
+            }
+          }
+          
+          if (n_shared_methods > 0) {
+            if (n_shared_methods == 1) {
+              disp_str <- paste0(disp_str, n_shared_methods, " shared methodology; ")
+            } else {
+              disp_str <- paste0(disp_str, n_shared_methods, " shared methodologies; ")
+            }
+          }
+          
+          disp_str <- paste0(substr(disp_str, 0, nchar(disp_str)-2), "</p>")
+          
+          div(
+            style = paste0("position: relative; flex: 0 0 375px; padding: 10px; margin: 0px 5px; background-color: ", bkgd_color,"; border-radius: 5px; border-style: solid; border-width: 1px; border-color: ", bord_color),
+            fluidRow(
+              style = "margin-bottom: 2.5em;",
+              column(
+                width = 12,
+                HTML(disp_str)
+              )
+            ),
+            # br(),
+            # br(),
+            fluidRow(
+              style = "position: absolute; bottom: 10px; right: 10px;",
+              column(
+                width = 12,
+                align = "right",
+                actionButton(inputId = paste0("go_to_rec_", i, j), label = "Take me here!", class = "btn-secondary"),
+                actionButton(inputId = paste0("save_rec_", i, j), label = icon("heart"), class = "btn-primary")
+              )
+            )
+          )
+        })
+        
+        fluidRow(
+          style = "padding: 5px; margin-bottom: -1.5em",
+          column(
+            width = 12,
+            div(
+              style = "width: 100%; overflow-x: auto; display:inline-flex;",
+              recs_list
+            )
+          )
         )
-      )
+      }
     })
     
     # "Save" buttons
@@ -761,7 +849,7 @@ server <- function(input, output, session) {
           div(
             # Basic resource info
             fluidRow(
-              style = paste0("padding-top: 7px; padding-bottom: 7px; margin-top: 2px; border-radius: 5px; border-style: solid; border-width: 1px; border-color: ", bord_color, "; background-color: ", bkgd_color),
+              style = paste0("padding-top: 7px; padding-bottom: 7px; margin-top: 5px; border-radius: 5px; border-style: solid; border-width: 1px; border-color: ", bord_color, "; background-color: ", bkgd_color),
               column(
                 width = 4,
                 style = "padding-top: 5px",
