@@ -387,7 +387,7 @@ server <- function(input, output, session) {
   
   # Generate features vectors and compute all similarity values
   catalog_features <<- feature_vectors(full_catalog, list_of_tags$Tags, catalog$`methodology--data`)
-  all_sim_values <- get_all_sims(catalog_features, sim_measure="cosine", total_tags=length(list_of_tags$Tags), total_methods=nrow(tmp_catalog[grepl("Methodology", tmp_catalog$Tags), ]))
+  all_sim_values <- get_all_sims(catalog_features, sim_measure="cosine", total_tags=length(list_of_tags$Tags), total_methods=nrow(full_catalog[grepl("Methodology", full_catalog$Tags), ]))
   
   # Similarity matrix between all resources
   rsc_sim <<- all_sim_values$sim_matrix

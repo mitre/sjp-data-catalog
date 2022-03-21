@@ -159,7 +159,7 @@ get_all_sims <- function(catalog_features, sim_measure, total_tags, total_method
       # Number of shared methodologies
       method_overlap <- i_feat[(length(i_feat) - total_methods + 1):length(i_feat)] + j_feat[(length(j_feat) - total_methods + 1):length(j_feat)] #Methodologies take up the last n_methods features in the vectors
       
-      methods_ij <- sum(overlap == 2)
+      methods_ij <- sum(method_overlap == 2)
       methods_shared[i, j] <- methods_ij
       methods_shared[j, i] <- methods_ij
     }
@@ -167,8 +167,8 @@ get_all_sims <- function(catalog_features, sim_measure, total_tags, total_method
   
   out <- list()
   out$sim_matrix <- sim
-  out$tags <- shared_tags
-  out$methods <- shared_methods
+  out$tags <- tags_shared
+  out$methods <- methods_shared
   
   return(out)
 }
