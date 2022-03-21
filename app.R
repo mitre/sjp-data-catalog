@@ -45,10 +45,58 @@ names(catalog) <<- sheet_names
 list_of_tags <<- catalog$'list of tags'
 tag_types <- unique(list_of_tags$'Tag Type')
 
-# KCJ: need to pull these values out of the data
+# Get all resources across all tabs
+datasets <- catalog$datasets
+repos <- catalog$'data repositories'
+methods <- catalog$methodologies
+tables <- catalog$tables
+tools <- catalog$tools
+full_catalog <- rbind.fill(datasets, repos, methods, tables, tools)
+full_catalog <- sort_by_criteria(full_catalog, "Alphabetical") #start off ordered alphabetically because that's what the default selection is
+colnames(full_catalog) <- unlist(lapply(colnames(full_catalog), function(x) {gsub(" ", "_", x)})) #changing column names so that there are no spaces
+
+# Generate features vectors and compute all similarity values
+catalog_features <<- feature_vectors(full_catalog, list_of_tags$Tags, catalog$`methodology--data`)
+all_sim_values <- get_all_sims(catalog_features, sim_measure="cosine", total_tags=length(list_of_tags$Tags), total_methods=nrow(full_catalog[grepl("Methodology", full_catalog$Tags), ]))
+
+# Similarity matrix between all resources
+rsc_sim <<- all_sim_values$sim_matrix
+all_sims <- rsc_sim[lower.tri(rsc_sim)]
+# sim_thresh <- quantile(all_sims)[["75%"]]
+sim_thresh <- mean(all_sims) + 2 * sd(all_sims)
+
+# Number of shared tags and methodologies
+shared_tags <<- all_sim_values$tags
+shared_methods <<- all_sim_values$methods
+
+# Get most similar resources (i.e. all with similarity greater than pre-set threshold)
+all_rsc_recs <- list()
+num_recs <- c()
+for (i in 1:nrow(full_catalog)) {
+  rsc_name <- full_catalog[i, "Name"]
+  recs <- c(rsc_sim[rsc_name, ])[order(-unlist(rsc_sim[rsc_name, ]))]
+  n_recs_show <- sum(recs > sim_thresh, na.rm=TRUE)
+  if (n_recs_show == 0) {
+    all_rsc_recs[[rsc_name]] <- c()
+    num_recs <- c(num_recs, 0)
+  } else {
+    all_rsc_recs[[rsc_name]] <- recs[1:n_recs_show]
+    num_recs <- c(num_recs, n_recs_show)
+  }
+}
+max_num_recs <- max(num_recs) #for generating buttons in the server
+
 # Get min and max years across catalog
-min_year <- 1968
-max_year <- 2022
+years_avail <<- full_catalog[order(full_catalog$Years_Available, na.last=TRUE, decreasing=FALSE), "Years_Available"]
+years_avail <<- years_avail[!(is.na(years_avail)) & years_avail != "N/A" & !(grepl("Varies", years_avail))]  #get values that aren't missing or actual text input (e.g. "N/A", "Varies")
+min_year <- strtoi(substr(years_avail[1], 1, 4))  #pull first 4 characters (YYYY) of first element in years_avail
+end_yrs <- unlist(lapply(years_avail, function(y) {
+  strtoi(substr(tail(strsplit(tail(trimws(strsplit(y, ",")[[1]]), n=1), "-")[[1]], n=1), 1, 4))
+}))  #get all of the ending years of each entry
+max_year <- max(end_yrs)  #take the max of all ending years to get overall max year
+
+# Get all available geographic levels
+
 
   
 
@@ -185,6 +233,7 @@ ui <- MITREnavbarPage(
           sep = "",
           min = min_year, 
           max = max_year, 
+          step = 1,
           value = c(min_year, max_year)
         ),
         
@@ -348,74 +397,11 @@ ui <- MITREnavbarPage(
   )
 )
 
-# Helper functions ----
-get_num_pages <- function(df, per_page) {
-  if (nrow(df) %% per_page == 0) {
-    total_pages <- nrow(df) %/% per_page  #default show_per_page=10
-  } else {
-    total_pages <- nrow(df) %/% per_page + 1  #default show_per_page=10
-  }
-  return(total_pages)
-}
 
-sort_by_criteria <- function(df, criteria) {
-  if (criteria == "Alphabetical") {
-    df <- df[order(df$Name), ]
-  } else if (criteria == "Year: Oldest to Newest") {
-    df <- df[order(df$Years_Available, na.last=TRUE), ]
-  } else {#if criteria == "Year: Newest to Oldest"
-    df <- df[order(df$Years_Available, na.last=TRUE, decreasing=TRUE), ]
-  }
-  return(df)
-}
 
 
 # Server ----
 server <- function(input, output, session) {
-  # List of selected tags
-  selected_tags <- reactiveVal(list())
-  
-  # Get all resources across all tabs
-  datasets <- catalog$datasets
-  repos <- catalog$'data repositories'
-  methods <- catalog$methodologies
-  tables <- catalog$tables
-  tools <- catalog$tools
-  full_catalog <- rbind.fill(datasets, repos, methods, tables, tools)
-  full_catalog <- sort_by_criteria(full_catalog, "Alphabetical") #start off ordered alphabetically because that's what the default selection is
-  colnames(full_catalog) <- unlist(lapply(colnames(full_catalog), function(x) {gsub(" ", "_", x)})) #changing column names so that there are no spaces
-  
-  # Generate features vectors and compute all similarity values
-  catalog_features <<- feature_vectors(full_catalog, list_of_tags$Tags, catalog$`methodology--data`)
-  all_sim_values <- get_all_sims(catalog_features, sim_measure="cosine", total_tags=length(list_of_tags$Tags), total_methods=nrow(full_catalog[grepl("Methodology", full_catalog$Tags), ]))
-  
-  # Similarity matrix between all resources
-  rsc_sim <<- all_sim_values$sim_matrix
-  all_sims <- rsc_sim[lower.tri(rsc_sim)]
-  # sim_thresh <- quantile(all_sims)[["75%"]]
-  sim_thresh <- mean(all_sims) + 2 * sd(all_sims)
-  
-  # Number of shared tags and methodologies
-  shared_tags <<- all_sim_values$tags
-  shared_methods <<- all_sim_values$methods
-  
-  # Get most similar resources (i.e. all with similarity greater than pre-set threshold)
-  all_rsc_recs <- list()
-  num_recs <- c()
-  for (i in 1:nrow(full_catalog)) {
-    rsc_name <- full_catalog[i, "Name"]
-    recs <- c(rsc_sim[rsc_name, ])[order(-unlist(rsc_sim[rsc_name, ]))]
-    n_recs_show <- sum(recs > sim_thresh, na.rm=TRUE)
-    if (n_recs_show == 0) {
-      all_rsc_recs[[rsc_name]] <- c()
-      num_recs <- c(num_recs, 0)
-    } else {
-      all_rsc_recs[[rsc_name]] <- recs[1:n_recs_show]
-      num_recs <- c(num_recs, n_recs_show)
-    }
-  }
-  max_num_recs <- max(num_recs) #for generating buttons in the server
-  
   # Current page
   current_page <- reactiveVal(1)
   # Total number of pages to view
@@ -437,7 +423,7 @@ server <- function(input, output, session) {
   # List of saved resources (i.e. shopping cart)
   shopping_list <- reactiveVal(list())
   
-  
+
   
   # Display number of total results and which ones are currently being shown
   output$num_results <- renderUI({
@@ -522,8 +508,10 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$filter, {
+    tmp_catalog <- full_catalog
+    
     # Update selected tags on button press
-    selected_tags(
+    selected_tags <-
       lapply(tag_types, function(t) {
         # Want to group tags from the subcategories together to pass to selected_tags
         subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
@@ -543,40 +531,69 @@ server <- function(input, output, session) {
         
         return(select_tags_type)
       })
-    )
+    
     
     # Update names of the list to be each of the tag types
-    selected_tags(setNames(selected_tags(), tag_types))
+    selected_tags <- setNames(selected_tags, tag_types)
     
-    # Making a local instance for easy reference
-    select_tags <- selected_tags()
-    
-    tmp_catalog <- full_catalog
-    
-    # If tags have been selected, show only the sources for the selected tags
-    if (!is.null(unlist(select_tags))) {
+    # Get sources with the selected tags
+    if (!is.null(unlist(selected_tags))) {
       # Filter according to each type of tag
-      for (tag_type in names(select_tags)) {
-        if (!is.null(select_tags[[tag_type]])) {
+      for (tag_type in names(selected_tags)) {
+        if (!is.null(selected_tags[[tag_type]])) {
           # Get user-selected tags for this tag type
-          get_select <- select_tags[[tag_type]]
+          get_select <- selected_tags[[tag_type]]
           
-          # Remove any entries that don't align with the selected tags'
-          rmv_indices <- c()
+          # Remove any entries that don't align with the selected tags
+          keep_indices <- c()
           for (i in 1:nrow(tmp_catalog)) {
             # Get tags for i-th entry
-            i_tags <- strsplit(tmp_catalog[i,]$Tags, ";")[[1]]
+            i_tags <- strsplit(tmp_catalog[i, "Tags"], ";")[[1]]
             i_tags <- trimws(i_tags)
             # If i-th resource is not of the selected tag types, remove it from catalog
-            if (length(intersect(get_select, i_tags)) == 0) {
-              rmv_indices <- c(rmv_indices, i)
+            if (length(intersect(get_select, i_tags)) > 0) {
+              keep_indices <- c(keep_indices, i)
             } 
           }
-          tmp_catalog <- tmp_catalog[-rmv_indices,]
+          tmp_catalog <- tmp_catalog[keep_indices,]
         }
       }
     }
     
+    # Further filter by year
+    if (input$filter_year[1] != min_year || input$filter_year[2] != max_year) {
+      selected_years <<- seq.int(input$filter_year[1], input$filter_year[2])
+      
+      keep_indices <- c()
+      for (i in 1:nrow(tmp_catalog)) {
+        i_yr_val <- tmp_catalog[i, "Years_Available"]
+        # Ignore if year data is missing or has string inputs (e.g. "N/A", "Varies")
+        if (!(is.na(i_yr_val)) & i_yr_val != "N/A" & !(grepl("Varies", i_yr_val))) {
+          # Remove any characters between parentheses and remove any trailing whitespace
+          i_yr_str <- trimws(gsub("\\(.*\\)", "", strsplit(i_yr_val, ",")[[1]]))
+          # Figure out of selected years overlaps with years available of selected resources
+          i_yrs <- unlist(lapply(i_yr_str, function(y) {
+            rng <- strtoi(strsplit(y, "-")[[1]])
+            if (length(rng) == 2) {
+              seq.int(rng[1], rng[2])
+            } else {#length(rng) == 1
+              rng[1]
+            }
+          }))
+          if (length(intersect(selected_years, i_yrs)) > 0) {
+            keep_indices <- c(keep_indices, i)
+          }
+        }
+      }
+      tmp_catalog <- tmp_catalog[keep_indices,]
+    }
+    
+    # Further filter by geographic level
+    if (!is.null(input$filter_geo_lvls)) {
+      selected_levels <- input$filter_geo_lvls
+    }
+    
+    # Sort the selected resources according to user input
     tmp_catalog <- sort_by_criteria(tmp_catalog, input$sort_by)
     
     selected_rscs(tmp_catalog)
@@ -586,7 +603,7 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$clear, {
-    # Reset all of the checkboxes
+    # Reset all of the tags checkboxes
     for (t in tag_types) {
       subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
       
@@ -611,15 +628,27 @@ server <- function(input, output, session) {
       }
     }
     
+    # Reset the years slider
+    updateSliderInput(
+      session,
+      inputId = "filter_year",
+      value = c(min_year, max_year)
+    )
+    
+    # Reset the geographic levels 
+    updateCheckboxGroupInput(
+      session, 
+      inputId = "filter_geo_lvls", 
+      selected = FALSE
+    )
+    
     # Reset the search bar
     updateTextInput(
       session,
       inputId = "search",
       value = ""
     )
-    
-    # Clear the list of selected tags
-    selected_tags(list())
+
     # Set selected_rscs back to the full catalog
     selected_rscs(sort_by_criteria(full_catalog, input$sort_by))
     
@@ -747,8 +776,9 @@ server <- function(input, output, session) {
           n_shared_tags <- shared_tags[rsc_name, names(recs[j])]
           n_shared_methods <- shared_methods[rsc_name, names(recs[j])]
           
+          n_lines_show <- 2  #Number of lines of description to show in rec box before cutting off
           desc <- full_catalog[full_catalog["Name"] == names(recs[j]), ][["Description"]]
-          disp_str <- paste0("<b>", names(recs[j]), "</b><p style='width: 375px; overflow:hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical;'>", desc, "</p><p>")
+          disp_str <- paste0("<b>", names(recs[j]), "</b><p style='width: 375px; overflow:hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: ", n_lines_show, "; line-clamp: ", n_lines_show, "; -webkit-box-orient: vertical;'>", desc, "</p><p>")
           
           if (n_shared_tags > 0) {
             if (n_shared_tags == 1) {
@@ -769,7 +799,7 @@ server <- function(input, output, session) {
           disp_str <- paste0(substr(disp_str, 0, nchar(disp_str)-2), "</p>")
           
           div(
-            style = paste0("position: relative; flex: 0 0 375px; padding: 10px; margin: 0px 5px; background-color: ", bkgd_color,"; border-radius: 5px; border-style: solid; border-width: 1px; border-color: ", bord_color),
+            style = paste0("position: relative; flex: 0 0 375px; padding: 10px; margin: 0px 5px; background-color: ", bkgd_color, "; border-radius: 5px; border-style: solid; border-width: 1px; border-color: ", bord_color),
             fluidRow(
               style = "margin-bottom: 2.5em;",
               column(
@@ -790,7 +820,7 @@ server <- function(input, output, session) {
         })
         
         fluidRow(
-          style = "padding: 5px; margin-bottom: -1.5em",
+          style = "padding: 5px 0px; margin-bottom: -1.5em",
           column(
             width = 12,
             div(

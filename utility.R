@@ -1,5 +1,29 @@
 library(lsa)
 
+
+# Get number of total pages given the length of the results to show and the per_page input
+get_num_pages <- function(df, per_page) {
+  if (nrow(df) %% per_page == 0) {
+    total_pages <- nrow(df) %/% per_page 
+  } else {
+    total_pages <- nrow(df) %/% per_page + 1  
+  }
+  return(total_pages)
+}
+
+# Sort the catalog according to some criteria (e.g. alphabetical, oldest to newest)
+sort_by_criteria <- function(df, criteria) {
+  if (criteria == "Alphabetical") {
+    df <- df[order(df$Name), ]
+  } else if (criteria == "Year: Oldest to Newest") {
+    df <- df[order(df$Years_Available, na.last=TRUE), ]
+  } else {#if criteria == "Year: Newest to Oldest"
+    df <- df[order(df$Years_Available, na.last=TRUE, decreasing=TRUE), ]
+  }
+  return(df)
+}
+
+
 # Takes a row from the catalog and generates a string to output in the associated UI card
 gen_rsc_info <- function(resource) {
   names(resource) <- unlist(lapply(names(resource), function(x) {gsub("_", " ", x)})) #add spaces back to the column names
