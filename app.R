@@ -96,7 +96,7 @@ end_yrs <- unlist(lapply(years_avail, function(y) {
 max_year <- max(end_yrs)  #take the max of all ending years to get overall max year
 
 # Get all available geographic levels
-
+geo_levels <- c("National", "State", "County", "City", "Census Tract")
 
   
 
@@ -247,8 +247,8 @@ ui <- MITREnavbarPage(
             label = NULL,
             selected = NULL,
             #KCJ: need to pull these values from data
-            choiceNames = c("National", "State", "County", "City", "Census Tract"),
-            choiceValues = c("National", "State", "County", "City", "Census Tract")
+            choiceNames = geo_levels,
+            choiceValues = geo_levels
           )
         ),
         
@@ -585,12 +585,22 @@ server <- function(input, output, session) {
           }
         }
       }
-      tmp_catalog <- tmp_catalog[keep_indices,]
+      tmp_catalog <- tmp_catalog[keep_indices, ]
     }
     
     # Further filter by geographic level
     if (!is.null(input$filter_geo_lvls)) {
       selected_levels <- input$filter_geo_lvls
+      
+      keep_indices <- c()
+      for (i in 1:nrow(tmp_catalog)) {
+        i_lvls <- trimws(strsplit(tmp_catalog[i, "Levels"], ";")[[1]])
+        
+        if (any(unlist(lapply(selected_levels, function(x) {x %in% i_lvls})))) {
+          keep_indices <- c(keep_indices, i)
+        }
+      }
+      tmp_catalog <- tmp_catalog[keep_indices, ]
     }
     
     # Sort the selected resources according to user input
