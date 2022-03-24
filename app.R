@@ -104,6 +104,8 @@ geo_levels <- c("National", "State", "County", "City", "Zip Code", "Census Tract
 # UI ----
 ui <- MITREnavbarPage(
   title = "Social Justice Platform Data Catalog",
+  header = includeCSS("www/style.css"),
+
   ## Main tab ----
   tabPanel(
     "Search Catalog",
@@ -124,11 +126,34 @@ ui <- MITREnavbarPage(
           actionButton(
             inputId = "go",
             label = "Go",
-            class="btn-primary"
+            class = "btn-primary"
           )
         ),
         
         hr(),
+        
+        # # Buttons for enacting filters and for clearing any existing selections
+        # fluidRow(
+        #   column(
+        #     width = 12,
+        #     style = "border-style: solid",
+        #     align = "center",
+        #     
+        #     br(),
+        #     
+        #     actionButton(
+        #       inputId = "filter",
+        #       label = "Filter",
+        #       class = "btn-primary"
+        #     ),
+        #     
+        #     actionButton(
+        #       inputId = "clear",
+        #       label = "Clear Selections",
+        #       class = "btn-secondary"
+        #     )
+        #   )
+        # ),
         
         h6("Filter by Tags"),
         lapply(tag_types, function(t) {
@@ -138,7 +163,7 @@ ui <- MITREnavbarPage(
           # Display checkbox groups for each subcategory within each tag type
           div(
             # Overarching tag types
-            style = 'padding-top: 5px',
+            class = 'tag_group_label',
             actionLink(
               inputId = paste0("label_", gsub(" ", "_", t)), 
               label = t, 
@@ -152,7 +177,7 @@ ui <- MITREnavbarPage(
               if (all(is.na(subcats))) {
                 # If there are no subcategories, just show the checkbox group
                 div(
-                  style = 'padding: 5px 0px 0px 1em',
+                  class = 'tag_chkbox',
                   checkboxGroupInput(
                     inputId = gsub(" ", "_", t),
                     label = NULL,
@@ -165,12 +190,12 @@ ui <- MITREnavbarPage(
               } else {
                 # Show subcategories within each tag type
                 div(
-                  style = 'padding-left: 1em', 
+                  class = 'tag_subcat', 
                   lapply(subcats, function(s) {
                     if (is.na(s)) {
                       # Assign any tags without a subcategory to "Other"
                       div(
-                        style = 'padding-top: 5px',
+                        class = 'tag_group_label',
                         actionLink(
                           inputId = paste("label", gsub(" ", "_", t), "Other", sep = "_"),
                           label = "Other",
@@ -179,7 +204,7 @@ ui <- MITREnavbarPage(
                         conditionalPanel(
                           condition = paste0("input.label_", gsub(" ", "_", t), "_Other", " % 2 == 1"),
                           div(
-                            style = 'padding: 5px 0px 0px 1em',
+                            class = 'tag_chkbox',
                             checkboxGroupInput(
                               inputId = paste(gsub(" ", "_", t), "Other", sep = "--"),
                               label = NULL,
@@ -193,7 +218,7 @@ ui <- MITREnavbarPage(
                     } else {
                       # Otherwise group tags together by their designated subcategory
                       div(
-                        style = 'padding-top: 5px',
+                        class = 'tag_group_label',
                         actionLink(
                           inputId = paste("label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
                           label = s,
@@ -202,7 +227,7 @@ ui <- MITREnavbarPage(
                         conditionalPanel(
                           condition = paste0("input.label_", gsub(" ", "_", t), "_", gsub(" ", "_", s), " % 2 == 1"),
                           div(
-                            style = 'padding: 5px 0px 0px 1em',
+                            class = 'tag_chkbox',
                             checkboxGroupInput(
                               inputId = paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--"),
                               label = NULL,
@@ -241,7 +266,7 @@ ui <- MITREnavbarPage(
         
         h6("Filter by Geographic Level"),
         div(
-          style = 'padding-top: 5px',
+          class = 'geo_lvl_chkbox',
           checkboxGroupInput(
             inputId = "filter_geo_lvls",
             label = NULL,
@@ -360,7 +385,7 @@ ui <- MITREnavbarPage(
           column(
             width = 6,
             div(
-              style = "display: inline-block; padding-top: 8px",
+              class = "saved_res_header",
               h2("Saved Resources")
             )
           ),
@@ -370,7 +395,7 @@ ui <- MITREnavbarPage(
             width = 6,
             align = "right",
             div(
-              style = "display: inline-block; padding-top: 25px",
+              class = "saved_res_btns",
               actionButton(
                 inputId = "clear_cart",
                 label = "Remove All",
@@ -438,14 +463,14 @@ server <- function(input, output, session) {
   output$num_results <- renderUI({
     if (input$show_per_page == "All") {
       div(
-        style = 'padding-top: 32px',
+        class = 'showing_n_res',
         HTML(paste0("<i>Showing all of ", nrow(selected_rscs())," results</i>"))
       )
     } else {
       start_i <- (strtoi(input$show_per_page) * (current_page() - 1) + 1)
       end_i <- min((strtoi(input$show_per_page) * current_page()), nrow(selected_rscs()))
       div(
-        style = 'padding-top: 32px',
+        class = 'showing_n_res',
         HTML(paste0("<i>Showing ", start_i,"-", end_i," of ", nrow(selected_rscs())," results</i>"))
       )
     }
@@ -718,7 +743,7 @@ server <- function(input, output, session) {
             column(
               width = 6,
               align = 'left',
-              style = "padding-top: 1em; margin-bottom: -1em;",
+              class = "rec_toggle",
               materialSwitch(
                 inputId = paste0('show_more_rscs_', i),
                 label = NULL,
@@ -799,10 +824,6 @@ server <- function(input, output, session) {
       rsc_name <- page_rscs()[i, "Name"]
       recs <- all_rsc_recs[[rsc_name]]
       
-      # Colors for the boxes
-      bkgd_color <- "#f0f7ff"
-      bord_color <- "#005B94"  #MITRE blue
-      
       if (is.null(recs)) {
         # Let user know if there are no sources to recommend
         HTML("<i>No recommended resources to show.</i>")
@@ -817,7 +838,7 @@ server <- function(input, output, session) {
           # Show n lines of the description -- cut off with ... if description exceeds max number of lines
           n_lines_show <- 2  #Number of lines of description to show in rec box before cutting off
           desc <- full_catalog[full_catalog["Name"] == names(recs[j]), ][["Description"]]
-          disp_str <- paste0("<b>", names(recs[j]), "</b><p style='width: 375px; overflow:hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: ", n_lines_show, "; line-clamp: ", n_lines_show, "; -webkit-box-orient: vertical;'>", desc, "</p><p>")
+          disp_str <- paste0("<b>", names(recs[j]), "</b><p class='rec_desc'>", desc, "</p><p>")
           
           # Display how many tags and methodologies the resource has in common with the rec
           if (n_shared_tags > 0) {
@@ -840,9 +861,9 @@ server <- function(input, output, session) {
           
           div(
             # Recommendation box content
-            style = paste0("position: relative; flex: 0 0 375px; padding: 10px; margin: 0px 5px; background-color: ", bkgd_color, "; border-radius: 5px; border-style: solid; border-width: 1px; border-color: ", bord_color),
+            class = "rec_box",
             fluidRow(
-              style = "margin-bottom: 2.5em;",
+              class = "rec_desc_div",
               column(
                 width = 12,
                 HTML(disp_str)
@@ -851,7 +872,7 @@ server <- function(input, output, session) {
             
             # "Show rec" and "Save" buttons
             fluidRow(
-              style = "position: absolute; bottom: 10px; right: 10px;",
+              class = "rec_btns",
               column(
                 width = 12,
                 align = "right",
@@ -864,11 +885,10 @@ server <- function(input, output, session) {
         
         # Create a horizontal scrolling div with all recommended resources
         fluidRow(
-          style = "padding: 5px 0px; margin-bottom: -1.5em",
           column(
             width = 12,
             div(
-              style = "width: 100%; overflow-x: auto; display:inline-flex;",
+              class = "rec_scroll",
               recs_list
             )
           )
@@ -957,23 +977,20 @@ server <- function(input, output, session) {
           div(
             # Summary resource info (name, type, link)
             fluidRow(
-              style = paste0("padding-top: 7px; padding-bottom: 7px; margin-top: 5px; border-radius: 5px; border-style: solid; border-width: 1px; border-color: ", bord_color, "; background-color: ", bkgd_color),
+              class = "saved_res",
               column(
                 width = 4,
-                style = "padding-top: 5px",
-                rsc_name
+                HTML(paste0("<p class='saved_res_info'>", rsc_name, "</p>"))
               ),
               
               column(
                 width = 2,
-                style = "padding-top: 5px",
-                rsc_type
+                HTML(paste0("<p class='saved_res_info'>", rsc_type, "</p>"))
               ),
               
               column(
                 width = 4,
-                style = "padding-top: 5px",
-                HTML("<a href=", rsc_url, ">", rsc_url, "</a>")
+                HTML(paste0("<p class='saved_res_info'><a href=", rsc_url, ">", rsc_url, "</a></p>"))
               ),
               
               # Expand and individual trash buttons
@@ -1000,7 +1017,7 @@ server <- function(input, output, session) {
                 
                 conditionalPanel(
                   condition = paste0("input.expand_cart_rsc_", i," % 2 == 1"),
-                  style = paste0("padding: 10px; background-color: #ffffff; margin: -0.25em -1.1em 0px -1.1em; border-radius: 0px 0px 5px 5px; border-style: solid; border-width: 1px; border-color: ", bord_color),
+                  class = "saved_res_detail",
                   HTML(gen_rsc_info(rsc_info))
                 )
                 
