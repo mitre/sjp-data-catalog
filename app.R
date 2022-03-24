@@ -96,7 +96,7 @@ end_yrs <- unlist(lapply(years_avail, function(y) {
 max_year <- max(end_yrs)  #take the max of all ending years to get overall max year
 
 # Get all available geographic levels
-geo_levels <- c("National", "State", "County", "City", "Census Tract")
+geo_levels <- c("National", "State", "County", "City", "Zip Code", "Census Tract")
 
   
 
@@ -246,12 +246,12 @@ ui <- MITREnavbarPage(
             inputId = "filter_geo_lvls",
             label = NULL,
             selected = NULL,
-            #KCJ: need to pull these values from data
             choiceNames = geo_levels,
             choiceValues = geo_levels
           )
         ),
         
+        # Buttons for enacting filters and for clearing any existing selections
         fluidRow(
           column(
             width = 12,
@@ -278,11 +278,13 @@ ui <- MITREnavbarPage(
         width = 9,
         
         fluidRow(
+          # Show the number of resources displayed on the current page
           column(
             width = 6,
             align = "left",
             uiOutput(outputId = "num_results")
           ),
+          # Drop downs for sorting resources and how many resources to show per page
           column(
             width = 6,
             align = "right",
@@ -305,7 +307,10 @@ ui <- MITREnavbarPage(
           )
         ),
         
+        # Main output showing resource cards
         uiOutput(outputId = "sources_output"),
+        
+        # Forward and back page buttons -- only visible if there are resources to show
         conditionalPanel(
           condition = "!output.no_matches",
           fluidRow(
@@ -340,16 +345,17 @@ ui <- MITREnavbarPage(
     "Insights",
   ),
   
-  ## Shopping cart
+  ## Shopping cart ----
   tabPanel(
     "Saved Resources",
     
     fluidRow(
+      # Left-side padding
       column(width = 2),
       
       column(
         width = 8,
-        
+
         fluidRow(
           column(
             width = 6,
@@ -359,6 +365,7 @@ ui <- MITREnavbarPage(
             )
           ),
 
+          # Buttons for clearing cart and for exporting cart to various file types
           column(
             width = 6,
             align = "right",
@@ -389,9 +396,11 @@ ui <- MITREnavbarPage(
         
         hr(),
         
+        # All cart contents
         uiOutput(outputId = "shopping_cart")
       ),
-        
+      
+      # Right-side padding
       column(width = 2)
     )
   )
@@ -471,6 +480,7 @@ server <- function(input, output, session) {
           s <- "Other"
         }
         
+        # Toggle the carets on the checkbox menu labels
         observeEvent(input[[paste("label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_")]], {
           if (input[[paste("label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_")]] %% 2 == 1) {
             updateActionLink(
@@ -489,7 +499,8 @@ server <- function(input, output, session) {
       })
     } 
   })
-    
+  
+  # "Go" button for the search bar
   observeEvent(input$go, {
     # Look for resources which have any fields that include a partial match to the search term(s)
     if (input$search != "") {
@@ -507,6 +518,7 @@ server <- function(input, output, session) {
     }
   })
   
+  # Button for filtering according to selected checkboxes
   observeEvent(input$filter, {
     tmp_catalog <- full_catalog
     
@@ -605,13 +617,15 @@ server <- function(input, output, session) {
     
     # Sort the selected resources according to user input
     tmp_catalog <- sort_by_criteria(tmp_catalog, input$sort_by)
-    
+
+    # Update reactive
     selected_rscs(tmp_catalog)
     
     # Reset to first page when filters change
     current_page(1)
   })
   
+  # Button for clearing all sidebar inputs
   observeEvent(input$clear, {
     # Reset all of the tags checkboxes
     for (t in tag_types) {
@@ -666,10 +680,12 @@ server <- function(input, output, session) {
     current_page(1)
   })
   
+  # Main output showing resource cards
   output$sources_output <- renderUI({
     tmp_catalog <<- selected_rscs()
     
     if (nrow(tmp_catalog) > 0) {
+      # If there are resources to show...
       no_matches(FALSE)
       
       # Get resources to be shown on current page
@@ -677,12 +693,14 @@ server <- function(input, output, session) {
         # Need to recompute how many pages there should be every time output changes
         total_pages(get_num_pages(selected_rscs(), strtoi(input$show_per_page)))
         
+        # Figure out which resources to display given the current page the user is on
         start_i <- (strtoi(input$show_per_page) * (current_page() - 1) + 1)
         end_i <- min((strtoi(input$show_per_page) * current_page()), nrow(tmp_catalog))
         indices <- start_i:end_i
         page_rscs(tmp_catalog[indices, ])
         
       } else {
+        # Show all resources on one page
         total_pages(1)
         page_rscs(tmp_catalog)
       }
@@ -692,8 +710,11 @@ server <- function(input, output, session) {
         bsCollapsePanel(
           title = page_rscs()[i, "Name"],
           value = paste0("rsc_", i),
+          # Show resource info
           HTML(gen_rsc_info(page_rscs()[i,])),
+          
           fluidRow(
+            # Toggle for showing recommended resources
             column(
               width = 6,
               align = 'left',
@@ -708,6 +729,7 @@ server <- function(input, output, session) {
               "Show me similar resources"
             ),
             
+            # Save button 
             column(
               width = 6,
               align = "right",
@@ -719,10 +741,11 @@ server <- function(input, output, session) {
               )
             )
           ),
+          
+          # Recommended resource cards
           conditionalPanel(
             condition = paste0("input.show_more_rscs_", i),
             br(),
-            # "Placeholder for resource recommendations",
             uiOutput(outputId = paste0("rsc_recs_", i)),
             br()
           )
@@ -733,9 +756,11 @@ server <- function(input, output, session) {
       collapseArgs[["multiple"]] <- TRUE
       collapseArgs[["open"]] <- unlist(lapply(1:nrow(page_rscs()), function(i) {paste0("rsc_", i)}))
       
+      # Make all the collapse panels
       do.call(bsCollapse, collapseArgs)
       
     } else {
+      # No resources to show
       no_matches(TRUE)
       fluidRow(
         column(
@@ -753,26 +778,28 @@ server <- function(input, output, session) {
     HTML(paste("Page", current_page(), "of", total_pages()))
   })
   
+  # Previous page button
   observeEvent(input$prev_page, {
     page <- max(1, current_page()-1)
     current_page(page)
   })
   
+  # Next page button
   observeEvent(input$next_page, {
     page <- min(current_page()+1, total_pages())
     current_page(page)
   })
   
   # Functions for each of the resource-specific buttons
-  # Need to apply function up to nrow(full_catalog) because can't access length of selected_rscs() outside of render/observe
+  # Need to apply function up to nrow(full_catalog) because can't access length of page_rscs() outside of render/observe
   lapply(1:nrow(full_catalog), function(i) {
-    # Show source recommendations
+    # Make resource recommendation boxes
     output[[paste0("rsc_recs_", i)]] <- renderUI({
       # Get most similar resources (i.e. all with similarity greater than pre-set threshold)
       rsc_name <- page_rscs()[i, "Name"]
       recs <- all_rsc_recs[[rsc_name]]
       
-      # Colors for displaying the recommended source boxes
+      # Colors for the boxes
       bkgd_color <- "#f0f7ff"
       bord_color <- "#005B94"  #MITRE blue
       
@@ -781,15 +808,18 @@ server <- function(input, output, session) {
         HTML("<i>No recommended resources to show.</i>")
         
       } else {
-        # Create a horizontal scrolling div with all recommended resources
+        # Create a list containing all of the recommended resource boxes (divs)
         recs_list <- lapply(1:length(recs), function(j) {
+          # Get number of shared tags and methodologies for display
           n_shared_tags <- shared_tags[rsc_name, names(recs[j])]
           n_shared_methods <- shared_methods[rsc_name, names(recs[j])]
           
+          # Show n lines of the description -- cut off with ... if description exceeds max number of lines
           n_lines_show <- 2  #Number of lines of description to show in rec box before cutting off
           desc <- full_catalog[full_catalog["Name"] == names(recs[j]), ][["Description"]]
           disp_str <- paste0("<b>", names(recs[j]), "</b><p style='width: 375px; overflow:hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: ", n_lines_show, "; line-clamp: ", n_lines_show, "; -webkit-box-orient: vertical;'>", desc, "</p><p>")
           
+          # Display how many tags and methodologies the resource has in common with the rec
           if (n_shared_tags > 0) {
             if (n_shared_tags == 1) {
               disp_str <- paste0(disp_str, n_shared_tags, " shared tag; ")
@@ -809,6 +839,7 @@ server <- function(input, output, session) {
           disp_str <- paste0(substr(disp_str, 0, nchar(disp_str)-2), "</p>")
           
           div(
+            # Recommendation box content
             style = paste0("position: relative; flex: 0 0 375px; padding: 10px; margin: 0px 5px; background-color: ", bkgd_color, "; border-radius: 5px; border-style: solid; border-width: 1px; border-color: ", bord_color),
             fluidRow(
               style = "margin-bottom: 2.5em;",
@@ -817,6 +848,8 @@ server <- function(input, output, session) {
                 HTML(disp_str)
               )
             ),
+            
+            # "Show rec" and "Save" buttons
             fluidRow(
               style = "position: absolute; bottom: 10px; right: 10px;",
               column(
@@ -829,6 +862,7 @@ server <- function(input, output, session) {
           )
         })
         
+        # Create a horizontal scrolling div with all recommended resources
         fluidRow(
           style = "padding: 5px 0px; margin-bottom: -1.5em",
           column(
@@ -842,11 +876,11 @@ server <- function(input, output, session) {
       }
     })
     
-    # Buttons of resource recs 
+    # Buttons for each of the resource recs 
     lapply(1:max_num_recs, function(j) {
       # See full resource info for rec
       observeEvent(input[[paste0("go_to_rec_", i, j)]], {
-        
+        #TBD
       })
       
       # Save the rec
@@ -877,30 +911,34 @@ server <- function(input, output, session) {
     })
   })
   
+  # Sort the catalog according to some criterion
   observeEvent(input$sort_by, {
     tmp <- selected_rscs()
     
     # Sort the resources output according to user input
     tmp <- sort_by_criteria(tmp, input$sort_by)
     
+    # Update reactive
     selected_rscs(tmp)
     
     # Reset to first page
     current_page(1)
   })
   
+  # Change the number of resources to show on each page
   observeEvent(input$show_per_page, {
     if (input$show_per_page != "All") {
       # Compute how many pages there should be based on user input
       total_pages(get_num_pages(selected_rscs(), strtoi(input$show_per_page)))
     } else {
+      # Show all resources on single page
       total_pages(1)
     }
     # Go back to first page if changing the number of resources per page
     current_page(1)
   })
   
-  
+  # Show all saved resources in shopping cart
   output$shopping_cart <- renderUI({
     if (length(shopping_list()) > 0) {
       # Headers
@@ -917,7 +955,7 @@ server <- function(input, output, session) {
           # bord_color <- "#bfddff"
           
           div(
-            # Basic resource info
+            # Summary resource info (name, type, link)
             fluidRow(
               style = paste0("padding-top: 7px; padding-bottom: 7px; margin-top: 5px; border-radius: 5px; border-style: solid; border-width: 1px; border-color: ", bord_color, "; background-color: ", bkgd_color),
               column(
@@ -938,7 +976,7 @@ server <- function(input, output, session) {
                 HTML("<a href=", rsc_url, ">", rsc_url, "</a>")
               ),
               
-              # Resource-specific buttons
+              # Expand and individual trash buttons
               column(
                 width = 2,
                 align = "right",
@@ -972,6 +1010,7 @@ server <- function(input, output, session) {
         })
       )
     } else {
+      # Display message for when there are no resources in the cart
       fluidRow(
         column(
           width = 12, 
@@ -983,6 +1022,7 @@ server <- function(input, output, session) {
     
   })
   
+  # Remove all items from the cart
   observeEvent(input$clear_cart, {
     if (length(shopping_list()) > 0) {
       # Take user to modal to make sure they actually want to clear their cart
@@ -1025,6 +1065,7 @@ server <- function(input, output, session) {
       
       write.csv(x = cart_df, file = choose.files(default=paste0("SavedResources_SJPCatalog_", format(Sys.time(), "%Y%m%d-%H%M%S"), ".csv"), caption="Save file", multi=FALSE))
       
+      # Modal to confirm that CSV has been saved
       showModal(
         modalDialog(
           HTML("Successfully downloaded a CSV with all saved resources!"),
@@ -1057,6 +1098,7 @@ server <- function(input, output, session) {
         envir = new.env(parent = globalenv())
       )
       
+      # Modal to confirm that PDF has been saved
       showModal(
         modalDialog(
           HTML("Successfully downloaded a report with all saved resources!"),
