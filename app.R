@@ -381,6 +381,7 @@ ui <- MITREnavbarPage(
         # Forward and back page buttons -- only visible if there are resources to show
         conditionalPanel(
           condition = "!output.no_matches",
+          br(),
           fluidRow(
             column(
               width = 12,
@@ -644,8 +645,7 @@ server <- function(input, output, session) {
     }
     
     # Further filter by year
-    if (input$filter_year[1] != min_year || input$filter_year[2] != max_year) {
-      # if (input$filter_year_na) {}
+    if (input$filter_year[1] != min_year || input$filter_year[2] != max_year || !input$filter_year_na) {
       selected_years <<- seq.int(input$filter_year[1], input$filter_year[2])
       
       keep_indices <- c()
@@ -665,6 +665,10 @@ server <- function(input, output, session) {
             }
           }))
           if (length(intersect(selected_years, i_yrs)) > 0) {
+            keep_indices <- c(keep_indices, i)
+          }
+        } else {
+          if (input$filter_year_na) {
             keep_indices <- c(keep_indices, i)
           }
         }
