@@ -17,6 +17,8 @@ library(dplyr)
 library(htmltools)
 library(MITREShiny)
 library(rmarkdown)
+library(bsplus)
+library(rintrojs)
 # library(shinysky)
 
 
@@ -96,7 +98,7 @@ end_yrs <- unlist(lapply(years_avail, function(y) {
 max_year <- max(end_yrs)  #take the max of all ending years to get overall max year
 
 # Get all available geographic levels
-geo_levels <- c("National", "State", "County", "City", "Zip Code", "Census Tract")
+geo_levels <- c("National", "State", "County", "City", "Zip Code", "ZCTA", "Census Tract", "Census Block")
 
   
 
@@ -110,11 +112,27 @@ ui <- MITREnavbarPage(
   tabPanel(
     "Search Catalog",
     
+    # To activate the use of popovers in your page
+    use_bs_popover(),
+    
+    # To activate the rintrojs tutorial package
+    introjsUI(),
+    
     sidebarLayout(
       sidebarPanel(
         width = 3,
         
-        h6("Search Keywords"),
+        HTML("<h6>Search Keywords"),
+        shiny_iconlink() %>%
+          bs_embed_popover(
+            title = NULL,
+            content = "This feature will search through the entire catalog for matches to the keywords.",
+            html = TRUE,
+            placement = "right",
+            trigger = "hover",
+            options = list(container = "body")),
+        HTML("</h6>"),
+        
         splitLayout(
           cellWidths = c("85%", "15%"), 
 
@@ -262,9 +280,34 @@ ui <- MITREnavbarPage(
           value = c(min_year, max_year)
         ),
         
+        checkboxInput(
+          inputId = "filter_year_na",
+          label = div(
+            "Include resources without designated years",
+            shiny_iconlink(class = "help_btn") %>%
+            bs_embed_popover(
+              title = NULL,
+              content = "Not all resources have year availability (e.g. Repositories, Methodologies, Tools). Check this box to include resources without years in the filtered results.",
+              HTML = TRUE,
+              trigger = "hover",
+              options = list(container = "body"))
+          ),
+          value = TRUE
+        ),
+        
         hr(),
         
-        h6("Filter by Geographic Level"),
+        HTML("<h6>Filter by Geographic Level"),
+        shiny_iconlink() %>%
+          bs_embed_popover(
+            title = NULL,
+            content = "Filter here by the most common geographic levels. You can use the search bar if you are looking for a more specific level.",
+            html = TRUE,
+            placement = "right",
+            trigger = "hover",
+            options = list(container = "body")),
+        HTML("</h6>"),
+        
         div(
           class = 'geo_lvl_chkbox',
           checkboxGroupInput(
@@ -457,6 +500,9 @@ server <- function(input, output, session) {
   # List of saved resources (i.e. shopping cart)
   shopping_list <- reactiveVal(list())
   
+  # Keep track of what solo recommended resource card is open
+  rec_open <- reactiveVal("")
+  
 
   
   # Display number of total results and which ones are currently being shown
@@ -599,6 +645,7 @@ server <- function(input, output, session) {
     
     # Further filter by year
     if (input$filter_year[1] != min_year || input$filter_year[2] != max_year) {
+      # if (input$filter_year_na) {}
       selected_years <<- seq.int(input$filter_year[1], input$filter_year[2])
       
       keep_indices <- c()
@@ -900,7 +947,68 @@ server <- function(input, output, session) {
     lapply(1:max_num_recs, function(j) {
       # See full resource info for rec
       observeEvent(input[[paste0("go_to_rec_", i, j)]], {
-        #TBD
+        # rec_card <- tibble::tribble(
+        #   ~element, ~intro, ~tooltipClass,
+        #   NA, "<p>Clicking <b>[Ready to Model]</b> reveals <b>Model Selections</b> in which you can toggle which factor categories include in your model and use the drop down menus to pick specific factors.</p><img width=\"980px\" src=\"media/tutorial1.gif\">", "tooltip-width-large",
+        #   NA, "Hooray! You finished the tour! Have fun exploring and building models!", "tooltip-width",
+        # )
+        # 
+        # introjs(
+        #   session,
+        #   options = list(disableInteraction = TRUE,
+        #                  steps = rec_card)
+        # )
+        
+        # Get name of rec to open
+        rsc_name <- page_rscs()[i, "Name"]
+        recs <- all_rsc_recs[[rsc_name]]
+        rec_name <- names(recs[j])
+        
+        # Update reactive
+        rec_open(rec_name)
+        
+        # Display solo card for the rec in a modal
+        showModal(
+          modalDialog(
+            class = "rec_modal",
+            
+            bsCollapse(
+              open = "rec_card",
+              bsCollapsePanel(
+                title = rec_name,
+                value = "rec_card",
+                # Show resource info
+                HTML(gen_rsc_info(full_catalog[full_catalog["Name"] == rec_name, ])),
+                
+                fluidRow(
+                  column(
+                    width = 12,
+                    align = "right",
+                    # Save button
+                    actionButton(
+                      inputId = paste0("add_to_cart_rec"), 
+                      label = "Save",
+                      icon = icon("heart"),
+                      class = "btn-primary"
+                    ),
+                    # Close button
+                    actionButton(
+                      inputId = paste0("close_rec"), 
+                      label = "Close",
+                      class = "btn-secondary"
+                    )
+                  )
+                )
+              )
+            ),
+            
+            footer = NULL,
+            easyClose = TRUE,
+            size = 'l',
+            fade = FALSE
+          )
+        )
+        
       })
       
       # Save the rec
@@ -929,6 +1037,19 @@ server <- function(input, output, session) {
       tmp <- tmp[-i]
       shopping_list(tmp)
     })
+  })
+  
+  # Save button for the solo rec cards
+  observeEvent(input$add_to_cart_rec, {
+    tmp <<- shopping_list()
+    tmp[[rec_open()]] <<- full_catalog[full_catalog["Name"] == rec_open(), ]
+    shopping_list(tmp)
+  })
+  
+  # Close button for the solo rec cards
+  observeEvent(input$close_rec, {
+    removeModal()
+    rec_open("")
   })
   
   # Sort the catalog according to some criterion
@@ -1046,6 +1167,7 @@ server <- function(input, output, session) {
       showModal(
         modalDialog(
           HTML("<p style=\"font-size: 15px\">Are you sure you want to clear your list? This will remove all saved resources.</p>"),
+
           footer = div(
             align = "center", 
             actionButton("clear_no", label="No, take me back", class="btn-secondary"),

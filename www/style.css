@@ -18,6 +18,7 @@
 
 .tag_subcat {
   padding-left: 1em;
+  padding-bottom: 15px;
 }
 
 .geo_lvl_chkbox {
@@ -99,3 +100,19 @@
   border-width: 1px; 
   border-color: #005B94;
 }
+
+.rec_modal {
+  padding: 0px;
+}
+
+.modal.in .modal-dialog {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.panel-group {
+  margin-bottom: 0px;
+}
+
