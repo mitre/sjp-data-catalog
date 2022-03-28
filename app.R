@@ -682,10 +682,12 @@ server <- function(input, output, session) {
       
       keep_indices <- c()
       for (i in 1:nrow(tmp_catalog)) {
-        i_lvls <- trimws(strsplit(tmp_catalog[i, "Levels"], ";")[[1]])
-        
-        if (any(unlist(lapply(selected_levels, function(x) {x %in% i_lvls})))) {
-          keep_indices <- c(keep_indices, i)
+        if (!is.na(tmp_catalog[i, "Levels"])) {
+          i_lvls <- trimws(strsplit(tmp_catalog[i, "Levels"], ";")[[1]])
+          
+          if (any(unlist(lapply(selected_levels, function(x) {x %in% i_lvls})))) {
+            keep_indices <- c(keep_indices, i)
+          }
         }
       }
       tmp_catalog <- tmp_catalog[keep_indices, ]
