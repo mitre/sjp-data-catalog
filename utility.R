@@ -181,19 +181,19 @@ get_all_sims <- function(catalog_features, sim_measure, total_tags, total_method
       sim[i, j] <- sim_ij
       sim[j, i] <- sim_ij
       
-      # Compute number of shared tags
-      tag_overlap <- i_feat[1:total_tags] + j_feat[1:total_tags] #Tags take up the first n_tags features in the vectors
+      # Get list of shared tags
+      # Tags take up the first n_tags features in the vectors
+      tags_overlap <- intersect(colnames(catalog_features)[1:total_tags][as.logical(i_feat[1:total_tags])], colnames(catalog_features)[1:total_tags][as.logical(j_feat[1:total_tags])]) 
       
-      tags_ij <- sum(tag_overlap == 2)
-      tags_shared[i, j] <- tags_ij
-      tags_shared[j, i] <- tags_ij
+      tags_shared[i, j][[1]] <- list(tags_overlap)
+      tags_shared[j, i][[1]] <- list(tags_overlap)
       
-      # Compute number of shared methodologies
-      method_overlap <- i_feat[(length(i_feat) - total_methods + 1):length(i_feat)] + j_feat[(length(j_feat) - total_methods + 1):length(j_feat)] #Methodologies take up the last n_methods features in the vectors
-      
-      methods_ij <- sum(method_overlap == 2)
-      methods_shared[i, j] <- methods_ij
-      methods_shared[j, i] <- methods_ij
+      # Get list of shared methodologies
+      # Methodologies take up the last n_methods features in the vectors
+      methods_overlap <- intersect(colnames(catalog_features)[(length(i_feat) - total_methods + 1):length(i_feat)][as.logical(i_feat[(length(i_feat) - total_methods + 1):length(i_feat)])], colnames(catalog_features)[(length(i_feat) - total_methods + 1):length(i_feat)][as.logical(j_feat[(length(i_feat) - total_methods + 1):length(i_feat)])])  
+
+      methods_shared[i, j][[1]] <- list(methods_overlap)
+      methods_shared[j, i][[1]] <- list(methods_overlap)
     }
   }
   

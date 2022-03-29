@@ -65,7 +65,8 @@ all_sim_values <- get_all_sims(catalog_features, sim_measure="cosine", total_tag
 rsc_sim <<- all_sim_values$sim_matrix
 all_sims <- rsc_sim[lower.tri(rsc_sim)]
 # sim_thresh <- quantile(all_sims)[["75%"]]
-sim_thresh <- mean(all_sims) + 2 * sd(all_sims)
+# sim_thresh <- mean(all_sims) + 1.64 * sd(all_sims)
+sim_thresh <- quantile(all_sims, 0.95)
 
 # Number of shared tags and methodologies
 shared_tags <<- all_sim_values$tags
@@ -106,11 +107,13 @@ geo_levels <- c("National", "State", "County", "City", "Zip Code", "ZCTA", "Cens
 # UI ----
 ui <- MITREnavbarPage(
   title = "Social Justice Platform Data Catalog",
+  id = "navbar_tabs",
   header = includeCSS("www/style.css"),
 
   ## Main tab ----
   tabPanel(
-    "Search Catalog",
+    title = "Search Catalog",
+    value = "search_tab",
     
     # To activate the use of popovers in your page
     use_bs_popover(),
@@ -406,17 +409,20 @@ ui <- MITREnavbarPage(
   
   ## About tab ----
   tabPanel(
-    "About",
+    title = "About",
+    value = "about_tab"
   ),
   
   ## Insights tab ----
   tabPanel(
-    "Insights",
+    title = "Insights",
+    value = "insights_tab"
   ),
   
   ## Shopping cart ----
   tabPanel(
-    "Saved Resources",
+    title = uiOutput("saved_res_title"),
+    value = "saved_res_tab",
     
     fluidRow(
       # Left-side padding
@@ -504,7 +510,37 @@ server <- function(input, output, session) {
   # Keep track of what solo recommended resource card is open
   rec_open <- reactiveVal("")
   
-
+  # Keep track of whether a new item has been added to the cart since the last time the cart was viewed
+  save_clicked <- reactiveVal(FALSE)
+  
+  
+  
+  # Update the "Saved Resources" navbar title whenever someone adds a resource to their cart
+  output$saved_res_title <- renderUI({
+    # if (input$navbar_tabs == "saved_res_tab") {
+    #   "Saved Resources"
+    # } else {
+    #   if (save_clicked()) {
+    #     "(Saved Resources)" 
+    #   } else {
+    #     "Saved Resources"
+    #   }
+    # }
+    
+    if (save_clicked()) {
+      "(Saved Resources)" 
+    } else {
+      "Saved Resources"
+    }
+    
+  })
+  
+  observeEvent(input$navbar_tabs, {
+    if (input$navbar_tabs == "saved_res_tab") {
+      # Reset save_clicked every time the user views their cart
+      save_clicked(FALSE)
+    }
+  })
   
   # Display number of total results and which ones are currently being shown
   output$num_results <- renderUI({
@@ -884,33 +920,31 @@ server <- function(input, output, session) {
       } else {
         # Create a list containing all of the recommended resource boxes (divs)
         recs_list <- lapply(1:length(recs), function(j) {
-          # Get number of shared tags and methodologies for display
-          n_shared_tags <- shared_tags[rsc_name, names(recs[j])]
-          n_shared_methods <- shared_methods[rsc_name, names(recs[j])]
+          rec_name <- names(recs[j])
+          # Get lists of shared tags and methodologies for display
+          tags_ij <- shared_tags[rsc_name, rec_name][[1]]
+          methods_ij <- shared_methods[rsc_name, rec_name][[1]]
           
-          # Show n lines of the description -- cut off with ... if description exceeds max number of lines
-          n_lines_show <- 2  #Number of lines of description to show in rec box before cutting off
-          desc <- full_catalog[full_catalog["Name"] == names(recs[j]), ][["Description"]]
-          disp_str <- paste0("<b>", names(recs[j]), "</b><p class='rec_desc'>", desc, "</p><p>")
+          # Show 2 lines of the description -- cut off with ... if description exceeds max number of lines (in CSS file)
+          desc <- full_catalog[full_catalog["Name"] == rec_name, ][["Description"]]
+          disp_str <- paste0("<b>", rec_name, "</b><p class='rec_desc'>", desc, "</p>")
           
           # Display how many tags and methodologies the resource has in common with the rec
-          if (n_shared_tags > 0) {
-            if (n_shared_tags == 1) {
-              disp_str <- paste0(disp_str, n_shared_tags, " shared tag; ")
+          if (length(tags_ij) > 0) {
+            if (length(tags_ij) == 1) {
+              disp_str <- paste0(disp_str, "<p>", length(tags_ij), " shared tag: ", paste(tags_ij, collapse=", "), "</p>")
             } else {
-              disp_str <- paste0(disp_str, n_shared_tags, " shared tags; ")
+              disp_str <- paste0(disp_str, "<p>", length(tags_ij), " shared tags: ", paste(tags_ij, collapse=", "), "</p>")
             }
           }
           
-          if (n_shared_methods > 0) {
-            if (n_shared_methods == 1) {
-              disp_str <- paste0(disp_str, n_shared_methods, " shared methodology; ")
+          if (length(methods_ij) > 0) {
+            if (length(methods_ij) == 1) {
+              disp_str <- paste0(disp_str, "<p>", length(methods_ij), " shared methodology: ", paste(methods_ij, collapse=", "), "</p>")
             } else {
-              disp_str <- paste0(disp_str, n_shared_methods, " shared methodologies; ")
+              disp_str <- paste0(disp_str, "<p>", length(methods_ij), " shared methodologies: ", paste(methods_ij, collapse=", "), "</p>")
             }
           }
-          
-          disp_str <- paste0(substr(disp_str, 0, nchar(disp_str)-2), "</p>")
           
           div(
             # Recommendation box content
@@ -1019,6 +1053,7 @@ server <- function(input, output, session) {
       
       # Save the rec
       observeEvent(input[[paste0("save_rec_", i, j)]], {
+        save_clicked(TRUE)
         rsc_name <- page_rscs()[i, "Name"]
         recs <- all_rsc_recs[[rsc_name]]
         
@@ -1031,6 +1066,7 @@ server <- function(input, output, session) {
     
     # "Save" buttons
     observeEvent(input[[paste0("add_to_cart_rsc_", i)]], {
+      save_clicked(TRUE)
       tmp <<- shopping_list()
       rsc_name <- page_rscs()[i, "Name"]
       tmp[[rsc_name]] <<- page_rscs()[i, ]
@@ -1047,6 +1083,7 @@ server <- function(input, output, session) {
   
   # Save button for the solo rec cards
   observeEvent(input$add_to_cart_rec, {
+    save_clicked(TRUE)
     tmp <<- shopping_list()
     tmp[[rec_open()]] <<- full_catalog[full_catalog["Name"] == rec_open(), ]
     shopping_list(tmp)
@@ -1179,7 +1216,8 @@ server <- function(input, output, session) {
             actionButton("clear_no", label="No, take me back", class="btn-secondary"),
             actionButton("clear_yes", label = "Yes, clear all", class="btn-primary")
           ),
-          easyClose = FALSE
+          easyClose = FALSE,
+          fade = FALSE
         )
       )
     }
@@ -1215,7 +1253,8 @@ server <- function(input, output, session) {
         modalDialog(
           HTML("Successfully downloaded a CSV with all saved resources!"),
           footer = NULL,
-          easyClose = TRUE
+          easyClose = TRUE,
+          fade = FALSE
         )
       )
     } 
@@ -1248,7 +1287,8 @@ server <- function(input, output, session) {
         modalDialog(
           HTML("Successfully downloaded a report with all saved resources!"),
           footer = NULL,
-          easyClose = TRUE
+          easyClose = TRUE,
+          fade = FALSE
         )
       )
     }
