@@ -154,12 +154,17 @@ get_all_sims <- function(catalog_features, sim_measure, total_tags, total_method
   colnames(sim) <- rownames(catalog_features)
   rownames(sim) <- rownames(catalog_features)
   
-  # Number of shared tags
+  # Lists of shared tags
+  n_tags_shared <- data.frame(matrix(nrow = nrow(catalog_features), ncol = nrow(catalog_features)))
+  colnames(n_tags_shared) <- rownames(catalog_features)
+  rownames(n_tags_shared) <- rownames(catalog_features)
+  
+  # Lists of shared tags
   tags_shared <- data.frame(matrix(nrow = nrow(catalog_features), ncol = nrow(catalog_features)))
   colnames(tags_shared) <- rownames(catalog_features)
   rownames(tags_shared) <- rownames(catalog_features)
   
-  # Number of shared methodologies
+  # Lists of shared methodologies
   methods_shared <- data.frame(matrix(nrow = nrow(catalog_features), ncol = nrow(catalog_features)))
   colnames(methods_shared) <- rownames(catalog_features)
   rownames(methods_shared) <- rownames(catalog_features)
@@ -185,6 +190,9 @@ get_all_sims <- function(catalog_features, sim_measure, total_tags, total_method
       # Tags take up the first n_tags features in the vectors
       tags_overlap <- intersect(colnames(catalog_features)[1:total_tags][as.logical(i_feat[1:total_tags])], colnames(catalog_features)[1:total_tags][as.logical(j_feat[1:total_tags])]) 
       
+      n_tags_shared[i, j] <- length(tags_overlap)
+      n_tags_shared[j, i] <- length(tags_overlap)
+      
       tags_shared[i, j][[1]] <- list(tags_overlap)
       tags_shared[j, i][[1]] <- list(tags_overlap)
       
@@ -199,6 +207,7 @@ get_all_sims <- function(catalog_features, sim_measure, total_tags, total_method
   
   out <- list()
   out$sim_matrix <- sim
+  out$n_tags <- n_tags_shared
   out$tags <- tags_shared
   out$methods <- methods_shared
   
