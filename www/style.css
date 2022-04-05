@@ -116,3 +116,15 @@
   margin-bottom: 0px;
 }
 
+.method_data_info {
+  overflow: hidden; 
+  white-space: nowrap; 
+  text-overflow: ellipsis; 
+  line-height: 40px;
+}
+
+.method_data_row {
+  padding: 5px 15px; 
+  height: 50px;
+}
+

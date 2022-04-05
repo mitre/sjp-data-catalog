@@ -49,13 +49,16 @@ tag_types <- unique(list_of_tags$'Tag Type')
 
 # Get all resources across all tabs
 datasets <- catalog$datasets
-repos <- catalog$'data repositories'
+repos <- catalog$`data repositories`
 methods <- catalog$methodologies
 tables <- catalog$tables
 tools <- catalog$tools
 full_catalog <- rbind.fill(datasets, repos, methods, tables, tools)
 full_catalog <- sort_by_criteria(full_catalog, "Alphabetical") #start off ordered alphabetically because that's what the default selection is
 colnames(full_catalog) <- unlist(lapply(colnames(full_catalog), function(x) {gsub(" ", "_", x)})) #changing column names so that there are no spaces
+
+# Get the data sources contained in the methodologies
+methods_data <- catalog$`methodology--data`
 
 # Generate features vectors and compute all similarity values
 catalog_features <<- feature_vectors(full_catalog, list_of_tags$Tags, catalog$`methodology--data`)
@@ -821,49 +824,171 @@ server <- function(input, output, session) {
       
       # Define all the collapse panels for each of the filtered resources
       collapseArgs <- lapply(1:nrow(page_rscs()), function(i) {
-        bsCollapsePanel(
-          title = page_rscs()[i, "Name"],
-          value = paste0("rsc_", i),
-          # Show resource info
-          HTML(gen_rsc_info(page_rscs()[i,])),
+        # Get name of resource
+        res_name <- page_rscs()[i, "Name"]
+        # Get type of resource
+        res_type <- strsplit(page_rscs()[i, "Tags"], ";")[[1]][1]
+
+        if (res_type == "Data Methodology") {
+          # Get list of data sources used in methodology
+          used_data <- methods_data[methods_data$'Methodology Name' == res_name, ]
+          used_data <- used_data[order(used_data$'Dataset Name'), ]
           
-          fluidRow(
-            # Toggle for showing recommended resources
-            column(
-              width = 6,
-              align = 'left',
-              class = "rec_toggle",
-              materialSwitch(
-                inputId = paste0('show_more_rscs_', i),
-                label = NULL,
-                value = FALSE,
-                status = "primary",
-                inline = TRUE,
-              ),
-              "Show me similar resources"
+          # Generate collapse specifically for methodology
+          bsCollapsePanel(
+            title = res_name,
+            value = paste0("rsc_", i),
+            # Show resource info
+            HTML(gen_rsc_info(page_rscs()[i,])),
+            
+            # If resource is a methodology, then add extra section for viewing individual contributing data sources
+            fluidRow(
+              column(
+                width = 12,
+                actionLink(
+                  inputId = paste0("view_methods_data_", i), 
+                  label = "View data sources used by this methodology", 
+                  icon("caret-right")
+                ),
+                
+                # Show/hide methodology's data sources
+                conditionalPanel(
+                  condition = paste0("input.view_methods_data_", i, " % 2 == 1"),
+                  
+                  # Generate a row with a "Take me here!" button for each data source
+                  lapply(1:nrow(used_data), function(j) {
+                    if (used_data[j, "Status"] == "Available") {
+                      fluidRow(
+                        class = "method_data_row",
+                        column(
+                          width = 3,
+                          HTML(paste0("<p class='method_data_info'><b>", used_data[j, "Dataset Name"], "</b></p>"))
+                        ),
+                        column(
+                          width = 2,
+                          HTML(paste0("<p class='method_data_info'>", used_data[j, "Type"], "</p>"))
+                        ),
+                        column(
+                          width = 3,
+                          HTML(paste0("<p class='method_data_info'>Years used: ", used_data[j, "Years Utilized"], "</p>"))
+                        ),
+                        column(
+                          width = 4,
+                          actionButton(
+                            inputId = paste0("go_to_methods_data_", i, j),
+                            label = "Take me here!",
+                            class = "btn-secondary"
+                          )
+                        )
+                      )
+                    } else {
+                      fluidRow(
+                        class = "method_data_row",
+                        column(
+                          width = 3,
+                          HTML(paste0("<p class='method_data_info'><b>", used_data[j, "Dataset Name"],"</b></p>"))
+                        ),
+                        column(
+                          width = 2,
+                          HTML(paste0("<p class='method_data_info'>", used_data[j, "Type"], "</p>"))
+                        ),
+                        column(
+                          width = 3,
+                          HTML(paste0("<p class='method_data_info'>Years used: ", used_data[j, "Years Utilized"], "</p>"))
+                        ),
+                        column(
+                          width = 4,
+                          HTML("<p class='method_data_info'><font color='red'><i>Not available</i></font></p>")
+                        )
+                      )
+                    }
+                  })
+                )
+              )
             ),
             
-            # Save button 
-            column(
-              width = 6,
-              align = "right",
-              actionButton(
-                inputId = paste0("add_to_cart_rsc_", i), 
-                label = "Save",
-                icon = icon("heart"),
-                class = "btn-primary"
+            fluidRow(
+              # Toggle for showing recommended resources
+              column(
+                width = 6,
+                align = 'left',
+                class = "rec_toggle",
+                materialSwitch(
+                  inputId = paste0('show_more_rscs_', i),
+                  label = NULL,
+                  value = FALSE,
+                  status = "primary",
+                  inline = TRUE,
+                ),
+                "Show me similar resources"
+              ),
+              
+              # Save button 
+              column(
+                width = 6,
+                align = "right",
+                actionButton(
+                  inputId = paste0("add_to_cart_rsc_", i), 
+                  label = "Save",
+                  icon = icon("heart"),
+                  class = "btn-primary"
+                )
               )
+            ),
+            
+            # Recommended resource cards
+            conditionalPanel(
+              condition = paste0("input.show_more_rscs_", i),
+              br(),
+              uiOutput(outputId = paste0("rsc_recs_", i)),
+              br()
             )
-          ),
-          
-          # Recommended resource cards
-          conditionalPanel(
-            condition = paste0("input.show_more_rscs_", i),
-            br(),
-            uiOutput(outputId = paste0("rsc_recs_", i)),
-            br()
           )
-        )
+        } else {
+          bsCollapsePanel(
+            title = res_name,
+            value = paste0("rsc_", i),
+            # Show resource info
+            HTML(gen_rsc_info(page_rscs()[i,])),
+            
+            fluidRow(
+              # Toggle for showing recommended resources
+              column(
+                width = 6,
+                align = 'left',
+                class = "rec_toggle",
+                materialSwitch(
+                  inputId = paste0('show_more_rscs_', i),
+                  label = NULL,
+                  value = FALSE,
+                  status = "primary",
+                  inline = TRUE,
+                ),
+                "Show me similar resources"
+              ),
+              
+              # Save button 
+              column(
+                width = 6,
+                align = "right",
+                actionButton(
+                  inputId = paste0("add_to_cart_rsc_", i), 
+                  label = "Save",
+                  icon = icon("heart"),
+                  class = "btn-primary"
+                )
+              )
+            ),
+            
+            # Recommended resource cards
+            conditionalPanel(
+              condition = paste0("input.show_more_rscs_", i),
+              br(),
+              uiOutput(outputId = paste0("rsc_recs_", i)),
+              br()
+            )
+          )
+        }
       })
       
       # Additional bsCollapse arguments
@@ -1062,6 +1187,23 @@ server <- function(input, output, session) {
         tmp[[rec_name]] <<- full_catalog[full_catalog["Name"] == rec_name, ]
         shopping_list(tmp)
       })
+    })
+    
+    # View methodology data sources
+    observeEvent(input[[paste0("view_methods_data_", i)]], {
+      if (input[[paste0("view_methods_data_", i)]] %% 2 == 1) {
+        updateActionLink(
+          session = session,
+          inputId = paste0("view_methods_data_", i),
+          icon = icon("caret-down")
+        )
+      } else {
+        updateActionLink(
+          session = session,
+          inputId = paste0("view_methods_data_", i),
+          icon = icon("caret-right")
+        )
+      }
     })
     
     # "Save" buttons
