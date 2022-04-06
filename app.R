@@ -59,6 +59,8 @@ colnames(full_catalog) <- unlist(lapply(colnames(full_catalog), function(x) {gsu
 
 # Get the data sources contained in the methodologies
 methods_data <- catalog$`methodology--data`
+# Get max number of data sources used by a methodology for generating buttons in the server
+max_methods_data <- max(table(methods_data$`Methodology Name`))
 
 # Generate features vectors and compute all similarity values
 catalog_features <<- feature_vectors(full_catalog, list_of_tags$Tags, catalog$`methodology--data`)
@@ -90,7 +92,8 @@ for (i in 1:nrow(full_catalog)) {
     num_recs <- c(num_recs, n_recs_show)
   }
 }
-max_num_recs <- max(num_recs) #for generating buttons in the server
+# Get max number of recs across all resources for generating buttons in the server
+max_num_recs <- max(num_recs) 
 
 # Get min and max years across catalog
 years_avail <<- full_catalog[order(full_catalog$Years_Available, na.last=TRUE, decreasing=FALSE), "Years_Available"]
@@ -511,7 +514,7 @@ server <- function(input, output, session) {
   shopping_list <- reactiveVal(list())
   
   # Keep track of what solo recommended resource card is open
-  rec_open <- reactiveVal("")
+  card_open <- reactiveVal("")
   
   # Keep track of whether a new item has been added to the cart since the last time the cart was viewed
   save_clicked <- reactiveVal(FALSE)
@@ -1112,30 +1115,18 @@ server <- function(input, output, session) {
     lapply(1:max_num_recs, function(j) {
       # See full resource info for rec
       observeEvent(input[[paste0("go_to_rec_", i, j)]], {
-        # rec_card <- tibble::tribble(
-        #   ~element, ~intro, ~tooltipClass,
-        #   NA, "<p>Clicking <b>[Ready to Model]</b> reveals <b>Model Selections</b> in which you can toggle which factor categories include in your model and use the drop down menus to pick specific factors.</p><img width=\"980px\" src=\"media/tutorial1.gif\">", "tooltip-width-large",
-        #   NA, "Hooray! You finished the tour! Have fun exploring and building models!", "tooltip-width",
-        # )
-        # 
-        # introjs(
-        #   session,
-        #   options = list(disableInteraction = TRUE,
-        #                  steps = rec_card)
-        # )
-        
         # Get name of rec to open
         rsc_name <- page_rscs()[i, "Name"]
         recs <- all_rsc_recs[[rsc_name]]
         rec_name <- names(recs[j])
         
         # Update reactive
-        rec_open(rec_name)
+        card_open(rec_name)
         
         # Display solo card for the rec in a modal
         showModal(
           modalDialog(
-            class = "rec_modal",
+            class = "card_modal",
             
             bsCollapse(
               open = "rec_card",
@@ -1145,20 +1136,21 @@ server <- function(input, output, session) {
                 # Show resource info
                 HTML(gen_rsc_info(full_catalog[full_catalog["Name"] == rec_name, ])),
                 
+                # Buttons for saving and closing modal
                 fluidRow(
                   column(
                     width = 12,
                     align = "right",
                     # Save button
                     actionButton(
-                      inputId = paste0("add_to_cart_rec"), 
+                      inputId = paste0("add_to_cart_solo_card"), 
                       label = "Save",
                       icon = icon("heart"),
                       class = "btn-primary"
                     ),
                     # Close button
                     actionButton(
-                      inputId = paste0("close_rec"), 
+                      inputId = paste0("close_solo_card"), 
                       label = "Close",
                       class = "btn-secondary"
                     )
@@ -1206,6 +1198,62 @@ server <- function(input, output, session) {
       }
     })
     
+    # Open solo card for a methodology data source in a modal
+    lapply(1:max_methods_data, function(k) {
+      observeEvent(input[[paste0("go_to_methods_data_", i, k)]], {
+        # Get name of data source to open
+        rsc_name <- page_rscs()[i, "Name"]
+        used_data <- methods_data[methods_data$'Methodology Name' == rsc_name, ]
+        used_data <- used_data[order(used_data$'Dataset Name'), ]
+        methods_data_name <- used_data[[k, "Dataset Name"]]
+        
+        # Update reactive
+        card_open(methods_data_name)
+        
+        # Display solo card for the rec in a modal
+        showModal(
+          modalDialog(
+            class = "card_modal",
+            
+            bsCollapse(
+              open = "methods_data_card",
+              bsCollapsePanel(
+                title = methods_data_name,
+                value = "methods_data_card",
+                # Show resource info
+                HTML(gen_rsc_info(full_catalog[full_catalog["Name"] == methods_data_name, ])),
+                
+                fluidRow(
+                  column(
+                    width = 12,
+                    align = "right",
+                    # Save button
+                    actionButton(
+                      inputId = paste0("add_to_cart_solo_card"), 
+                      label = "Save",
+                      icon = icon("heart"),
+                      class = "btn-primary"
+                    ),
+                    # Close button
+                    actionButton(
+                      inputId = paste0("close_solo_card"), 
+                      label = "Close",
+                      class = "btn-secondary"
+                    )
+                  )
+                )
+              )
+            ),
+            
+            footer = NULL,
+            easyClose = TRUE,
+            size = 'l',
+            fade = FALSE
+          )
+        )
+      })
+    })
+    
     # "Save" buttons
     observeEvent(input[[paste0("add_to_cart_rsc_", i)]], {
       save_clicked(TRUE)
@@ -1223,18 +1271,18 @@ server <- function(input, output, session) {
     })
   })
   
-  # Save button for the solo rec cards
-  observeEvent(input$add_to_cart_rec, {
+  # Save button for the solo cards
+  observeEvent(input$add_to_cart_solo_card, {
     save_clicked(TRUE)
     tmp <<- shopping_list()
-    tmp[[rec_open()]] <<- full_catalog[full_catalog["Name"] == rec_open(), ]
+    tmp[[card_open()]] <<- full_catalog[full_catalog["Name"] == card_open(), ]
     shopping_list(tmp)
   })
   
-  # Close button for the solo rec cards
-  observeEvent(input$close_rec, {
+  # Close button for the solo cards
+  observeEvent(input$close_solo_card, {
     removeModal()
-    rec_open("")
+    card_open("")
   })
   
   # Sort the catalog according to some criterion
