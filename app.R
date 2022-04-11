@@ -901,7 +901,7 @@ server <- function(input, output, session) {
                         ),
                         column(
                           width = 4,
-                          HTML("<p class='method_data_info'><font color='red'><i>Not available</i></font></p>")
+                          HTML(paste0("<p class='method_data_info'><font color='red'><i>", used_data[j, "Status"], "</i></font></p>"))
                         )
                       )
                     }
