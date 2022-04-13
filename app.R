@@ -1,11 +1,13 @@
-#
+# SJP Data Catalog App
+# By Kirbi Joe, Data Sources and Analysis Team
+
+
 # This is a Shiny web application. You can run the application by clicking
 # the 'Run App' button above.
 #
 # Find out more about building applications with Shiny here:
 #
 #    http://shiny.rstudio.com/
-#
 
 library(shiny)
 library(shinyjs)
@@ -19,32 +21,34 @@ library(MITREShiny)
 library(rmarkdown)
 library(bsplus)
 library(rintrojs)
-# library(shinysky)
+library(lsa)
 
 
 # Data and Utility definitions ----
 
-# Suporting functions
+## Suporting functions ----
 source("utility.R")
+
+## Catalog data ----
 
 # Data folder
 data_folder <- file.path(
   gsub("\\\\","/", gsub("OneDrive - ","", Sys.getenv("OneDrive"))), 
   "Social Justice Platform WSs - Data Catalog")
 
-# Catalog data
+# Read in data from each tab
 path_to_catalog <- file.path(data_folder, "sjp_data_catalog.xlsx")
 sheet_names <- excel_sheets(path_to_catalog)
 ignore_sheets <- c("guidelines", "Copewell Indicators", "to review", "mitch_milestone_goals") #sheets to ignore
-catalog <<- lapply(sheet_names, function(X) {
+catalog <- lapply(sheet_names, function(X) {
     if (!(X %in% ignore_sheets)) {
       read_excel(path_to_catalog, sheet = X) 
     }
   })
-names(catalog) <<- sheet_names
+names(catalog) <- sheet_names
 
 # Tags info
-list_of_tags <<- catalog$'list of tags'
+list_of_tags <- catalog$'list of tags'
 tag_types <- unique(list_of_tags$'Tag Type')
 
 # Get all resources across all tabs
@@ -62,20 +66,34 @@ methods_data <- catalog$`methodology--data`
 # Get max number of data sources used by a methodology for generating buttons in the server
 max_methods_data <- max(table(methods_data$`Methodology Name`))
 
+# Get min and max years across catalog
+years_avail <- full_catalog[order(full_catalog$Years_Available, na.last=TRUE, decreasing=FALSE), "Years_Available"]
+years_avail <- years_avail[!(is.na(years_avail)) & years_avail != "N/A" & !(grepl("Varies", years_avail))]  #get values that aren't missing or actual text input (e.g. "N/A", "Varies")
+min_year <- strtoi(substr(years_avail[1], 1, 4))  #pull first 4 characters (YYYY) of first element in years_avail
+end_yrs <- unlist(lapply(years_avail, function(y) {
+  strtoi(substr(tail(strsplit(tail(trimws(strsplit(y, ",")[[1]]), n=1), "-")[[1]], n=1), 1, 4))
+}))  #get all of the ending years of each entry
+max_year <- max(end_yrs)  #take the max of all ending years to get overall max year
+
+# Get all available geographic levels
+geo_levels <- c("National", "State", "County", "City", "Zip Code", "ZCTA", "Census Tract", "Census Block")
+
+## Computed values ----
+
 # Generate features vectors and compute all similarity values
-catalog_features <<- feature_vectors(full_catalog, list_of_tags$Tags, catalog$`methodology--data`)
+catalog_features <- feature_vectors(full_catalog, list_of_tags$Tags, catalog$`methodology--data`)
 all_sim_values <- get_all_sims(catalog_features, sim_measure="cosine", total_tags=length(list_of_tags$Tags), total_methods=nrow(full_catalog[grepl("Methodology", full_catalog$Tags), ]))
 
 # Similarity matrix between all resources
-rsc_sim <<- all_sim_values$sim_matrix
+rsc_sim <- all_sim_values$sim_matrix
 all_sims <- rsc_sim[lower.tri(rsc_sim)]
 # sim_thresh <- quantile(all_sims)[["75%"]]
 # sim_thresh <- mean(all_sims) + 1.64 * sd(all_sims)
 sim_thresh <- quantile(all_sims, 0.95)
 
 # Number of shared tags and methodologies
-shared_tags <<- all_sim_values$tags
-shared_methods <<- all_sim_values$methods
+shared_tags <- all_sim_values$tags
+shared_methods <- all_sim_values$methods
 
 # Get most similar resources (i.e. all with similarity greater than pre-set threshold)
 all_rsc_recs <- list()
@@ -95,17 +113,7 @@ for (i in 1:nrow(full_catalog)) {
 # Get max number of recs across all resources for generating buttons in the server
 max_num_recs <- max(num_recs) 
 
-# Get min and max years across catalog
-years_avail <<- full_catalog[order(full_catalog$Years_Available, na.last=TRUE, decreasing=FALSE), "Years_Available"]
-years_avail <<- years_avail[!(is.na(years_avail)) & years_avail != "N/A" & !(grepl("Varies", years_avail))]  #get values that aren't missing or actual text input (e.g. "N/A", "Varies")
-min_year <- strtoi(substr(years_avail[1], 1, 4))  #pull first 4 characters (YYYY) of first element in years_avail
-end_yrs <- unlist(lapply(years_avail, function(y) {
-  strtoi(substr(tail(strsplit(tail(trimws(strsplit(y, ",")[[1]]), n=1), "-")[[1]], n=1), 1, 4))
-}))  #get all of the ending years of each entry
-max_year <- max(end_yrs)  #take the max of all ending years to get overall max year
 
-# Get all available geographic levels
-geo_levels <- c("National", "State", "County", "City", "Zip Code", "ZCTA", "Census Tract", "Census Block")
 
   
 
@@ -116,7 +124,7 @@ ui <- MITREnavbarPage(
   id = "navbar_tabs",
   header = includeCSS("www/style.css"),
 
-  ## Main tab ----
+  ## Search Catalog tab ----
   tabPanel(
     title = "Search Catalog",
     value = "search_tab",
@@ -131,6 +139,7 @@ ui <- MITREnavbarPage(
       sidebarPanel(
         width = 3,
         
+        ### Search Catalog: Search by keywords ----
         HTML("<h6>Search Keywords"),
         shiny_iconlink() %>%
           bs_embed_popover(
@@ -159,124 +168,13 @@ ui <- MITREnavbarPage(
         
         hr(),
         
-        # # Buttons for enacting filters and for clearing any existing selections
-        # fluidRow(
-        #   column(
-        #     width = 12,
-        #     style = "border-style: solid",
-        #     align = "center",
-        #     
-        #     br(),
-        #     
-        #     actionButton(
-        #       inputId = "filter",
-        #       label = "Filter",
-        #       class = "btn-primary"
-        #     ),
-        #     
-        #     actionButton(
-        #       inputId = "clear",
-        #       label = "Clear Selections",
-        #       class = "btn-secondary"
-        #     )
-        #   )
-        # ),
-        
+        ### Search Catalog: Filter by tags ----
         h6("Filter by Tags"),
-        lapply(tag_types, function(t) {
-          tags <- list_of_tags[list_of_tags$'Tag Type' == t, ]
-          subcats <- sort(unique(tags$Subcategory), na.last = TRUE)
-            
-          # Display checkbox groups for each subcategory within each tag type
-          div(
-            # Overarching tag types
-            class = 'tag_group_label',
-            actionLink(
-              inputId = paste0("label_", gsub(" ", "_", t)), 
-              label = t, 
-              icon("caret-right")
-            ),
-            
-            # Show/hide the info within each tag type
-            conditionalPanel(
-              condition = paste0("input.label_", gsub(" ", "_", t)," % 2 == 1"),
-              
-              if (all(is.na(subcats))) {
-                # If there are no subcategories, just show the checkbox group
-                div(
-                  class = 'tag_chkbox',
-                  checkboxGroupInput(
-                    inputId = gsub(" ", "_", t),
-                    label = NULL,
-                    selected = NULL,
-                    choiceNames = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)]),
-                    choiceValues = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)])
-                  )
-                )
-                
-              } else {
-                # Show subcategories within each tag type
-                div(
-                  class = 'tag_subcat', 
-                  lapply(subcats, function(s) {
-                    if (is.na(s)) {
-                      # Assign any tags without a subcategory to "Other"
-                      div(
-                        class = 'tag_group_label',
-                        actionLink(
-                          inputId = paste("label", gsub(" ", "_", t), "Other", sep = "_"),
-                          label = "Other",
-                          icon("caret-right")
-                        ),
-                        conditionalPanel(
-                          condition = paste0("input.label_", gsub(" ", "_", t), "_Other", " % 2 == 1"),
-                          div(
-                            class = 'tag_chkbox',
-                            checkboxGroupInput(
-                              inputId = paste(gsub(" ", "_", t), "Other", sep = "--"),
-                              label = NULL,
-                              selected = NULL,
-                              choiceNames = sort(tags$Tags[is.na(tags$'Subcategory')]),
-                              choiceValues = sort(tags$Tags[is.na(tags$'Subcategory')])
-                            )
-                          )
-                        )
-                      )
-                    } else {
-                      # Otherwise group tags together by their designated subcategory
-                      div(
-                        class = 'tag_group_label',
-                        actionLink(
-                          inputId = paste("label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
-                          label = s,
-                          icon("caret-right")
-                        ),
-                        conditionalPanel(
-                          condition = paste0("input.label_", gsub(" ", "_", t), "_", gsub(" ", "_", s), " % 2 == 1"),
-                          div(
-                            class = 'tag_chkbox',
-                            checkboxGroupInput(
-                              inputId = paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--"),
-                              label = NULL,
-                              selected = NULL,
-                              choiceNames = sort(tags$Tags[which(tags$'Subcategory' == s)]),
-                              choiceValues = sort(tags$Tags[which(tags$'Subcategory' == s)])
-                            )
-                          )
-                        )
-                      )
-                    }
-                    
-                    
-                  })
-                )
-              }
-            )
-          )
-        }),
+        uiOutput(outputId = "filter_tags"),
         
         hr(),
         
+        ### Search Catalog: Filter by year ----
         h6("Filter by Year"),
         
         sliderInput(
@@ -306,6 +204,7 @@ ui <- MITREnavbarPage(
         
         hr(),
         
+        ### Search Catalog: Filter by geographic level ----
         HTML("<h6>Filter by Geographic Level"),
         shiny_iconlink() %>%
           bs_embed_popover(
@@ -328,6 +227,7 @@ ui <- MITREnavbarPage(
           )
         ),
         
+        ### Search Catalog: Filter buttons ----
         # Buttons for enacting filters and for clearing any existing selections
         fluidRow(
           column(
@@ -354,6 +254,7 @@ ui <- MITREnavbarPage(
       mainPanel(
         width = 9,
         
+        ### Search Catalog: Viewing options ----
         fluidRow(
           # Show the number of resources displayed on the current page
           column(
@@ -384,7 +285,7 @@ ui <- MITREnavbarPage(
           )
         ),
         
-        # Main output showing resource cards
+        ### Search Catalog: Main output showing resource cards ----
         uiOutput(outputId = "sources_output"),
         
         # Forward and back page buttons -- only visible if there are resources to show
@@ -425,7 +326,7 @@ ui <- MITREnavbarPage(
     value = "insights_tab"
   ),
   
-  ## Shopping cart ----
+  ## Saved Resources tab ----
   tabPanel(
     title = uiOutput("saved_res_title"),
     value = "saved_res_tab",
@@ -437,6 +338,7 @@ ui <- MITREnavbarPage(
       column(
         width = 8,
 
+        ### Saved Resources: Header and Buttons ----
         fluidRow(
           column(
             width = 6,
@@ -477,7 +379,7 @@ ui <- MITREnavbarPage(
         
         hr(),
         
-        # All cart contents
+        ### Saved Resource: Cart contents ----
         uiOutput(outputId = "shopping_cart")
       ),
       
@@ -492,6 +394,8 @@ ui <- MITREnavbarPage(
 
 # Server ----
 server <- function(input, output, session) {
+  ## Define reactives ----
+  
   # Current page
   current_page <- reactiveVal(1)
   # Total number of pages to view
@@ -520,52 +424,102 @@ server <- function(input, output, session) {
   save_clicked <- reactiveVal(FALSE)
   
   
+  ## Search Catalog: Filter by tags ----
   
-  # Update the "Saved Resources" navbar title whenever someone adds a resource to their cart
-  output$saved_res_title <- renderUI({
-    # if (input$navbar_tabs == "saved_res_tab") {
-    #   "Saved Resources"
-    # } else {
-    #   if (save_clicked()) {
-    #     "(Saved Resources)" 
-    #   } else {
-    #     "Saved Resources"
-    #   }
-    # }
-    
-    if (save_clicked()) {
-      "(Saved Resources)" 
-    } else {
-      "Saved Resources"
-    }
-    
-  })
-  
-  observeEvent(input$navbar_tabs, {
-    if (input$navbar_tabs == "saved_res_tab") {
-      # Reset save_clicked every time the user views their cart
-      save_clicked(FALSE)
-    }
-  })
-  
-  # Display number of total results and which ones are currently being shown
-  output$num_results <- renderUI({
-    if (input$show_per_page == "All") {
+  ### Generate collapsible menus for the filter by tag checkboxes ----
+  output$filter_tags <- renderUI({
+    lapply(tag_types, function(t) {
+      tags <- list_of_tags[list_of_tags$'Tag Type' == t, ]
+      subcats <- sort(unique(tags$Subcategory), na.last = TRUE)
+      
+      # Display checkbox groups for each subcategory within each tag type
       div(
-        class = 'showing_n_res',
-        HTML(paste0("<i>Showing all of ", nrow(selected_rscs())," results</i>"))
+        # Overarching tag types
+        class = 'tag_group_label',
+        actionLink(
+          inputId = paste0("label_", gsub(" ", "_", t)), 
+          label = t, 
+          icon("caret-right")
+        ),
+        
+        # Show/hide the info within each tag type
+        conditionalPanel(
+          condition = paste0("input.label_", gsub(" ", "_", t)," % 2 == 1"),
+          
+          if (all(is.na(subcats))) {
+            # If there are no subcategories, just show the checkbox group
+            div(
+              class = 'tag_chkbox',
+              checkboxGroupInput(
+                inputId = gsub(" ", "_", t),
+                label = NULL,
+                selected = NULL,
+                choiceNames = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)]),
+                choiceValues = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)])
+              )
+            )
+            
+          } else {
+            # Show subcategories within each tag type
+            div(
+              class = 'tag_subcat', 
+              lapply(subcats, function(s) {
+                if (is.na(s)) {
+                  # Assign any tags without a subcategory to "Other"
+                  div(
+                    class = 'tag_group_label',
+                    actionLink(
+                      inputId = paste("label", gsub(" ", "_", t), "Other", sep = "_"),
+                      label = "Other",
+                      icon("caret-right")
+                    ),
+                    conditionalPanel(
+                      condition = paste0("input.label_", gsub(" ", "_", t), "_Other", " % 2 == 1"),
+                      div(
+                        class = 'tag_chkbox',
+                        checkboxGroupInput(
+                          inputId = paste(gsub(" ", "_", t), "Other", sep = "--"),
+                          label = NULL,
+                          selected = NULL,
+                          choiceNames = sort(tags$Tags[is.na(tags$'Subcategory')]),
+                          choiceValues = sort(tags$Tags[is.na(tags$'Subcategory')])
+                        )
+                      )
+                    )
+                  )
+                } else {
+                  # Otherwise group tags together by their designated subcategory
+                  div(
+                    class = 'tag_group_label',
+                    actionLink(
+                      inputId = paste("label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
+                      label = s,
+                      icon("caret-right")
+                    ),
+                    conditionalPanel(
+                      condition = paste0("input.label_", gsub(" ", "_", t), "_", gsub(" ", "_", s), " % 2 == 1"),
+                      div(
+                        class = 'tag_chkbox',
+                        checkboxGroupInput(
+                          inputId = paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--"),
+                          label = NULL,
+                          selected = NULL,
+                          choiceNames = sort(tags$Tags[which(tags$'Subcategory' == s)]),
+                          choiceValues = sort(tags$Tags[which(tags$'Subcategory' == s)])
+                        )
+                      )
+                    )
+                  )
+                }
+              })
+            )
+          }
+        )
       )
-    } else {
-      start_i <- (strtoi(input$show_per_page) * (current_page() - 1) + 1)
-      end_i <- min((strtoi(input$show_per_page) * current_page()), nrow(selected_rscs()))
-      div(
-        class = 'showing_n_res',
-        HTML(paste0("<i>Showing ", start_i,"-", end_i," of ", nrow(selected_rscs())," results</i>"))
-      )
-    }
+    })
   })
   
-  # Toggle the carets on the checkbox menu labels
+  ### Toggle the carets on the checkbox menu labels ----
   lapply(tag_types, function(t) {
     # Labels for tag types
     observeEvent(input[[paste("label", gsub(" ", "_", t), sep = "_")]], {
@@ -614,25 +568,7 @@ server <- function(input, output, session) {
     } 
   })
   
-  # "Go" button for the search bar
-  observeEvent(input$go, {
-    # Look for resources which have any fields that include a partial match to the search term(s)
-    if (input$search != "") {
-      search_terms <- input$search
-      include_terms <- t(matrix(grepl(search_terms, t(full_catalog), ignore.case = TRUE), ncol=nrow(full_catalog)))
-      rsc_index <- unlist(lapply(1:nrow(include_terms), function(i) {any(include_terms[i, ])}))
-      tmp_catalog <- full_catalog[rsc_index, ]
-
-      tmp_catalog <- sort_by_criteria(tmp_catalog, input$sort_by)
-      
-      selected_rscs(tmp_catalog)
-      
-      # Reset to first page
-      current_page(1)
-    }
-  })
-  
-  # Button for filtering according to selected checkboxes
+  ### Button for filtering according to selected checkboxes ----
   observeEvent(input$filter, {
     tmp_catalog <- full_catalog
     
@@ -688,7 +624,7 @@ server <- function(input, output, session) {
     
     # Further filter by year
     if (input$filter_year[1] != min_year || input$filter_year[2] != max_year || !input$filter_year_na) {
-      selected_years <<- seq.int(input$filter_year[1], input$filter_year[2])
+      selected_years <- seq.int(input$filter_year[1], input$filter_year[2])
       
       keep_indices <- c()
       for (i in 1:nrow(tmp_catalog)) {
@@ -745,6 +681,26 @@ server <- function(input, output, session) {
     current_page(1)
   })
   
+  # Search Catalog: Search using keywords
+  # "Go" button for the search bar
+  observeEvent(input$go, {
+    # Look for resources which have any fields that include a partial match to the search term(s)
+    if (input$search != "") {
+      search_terms <- input$search
+      include_terms <- t(matrix(grepl(search_terms, t(full_catalog), ignore.case = TRUE), ncol=nrow(full_catalog)))
+      rsc_index <- unlist(lapply(1:nrow(include_terms), function(i) {any(include_terms[i, ])}))
+      tmp_catalog <- full_catalog[rsc_index, ]
+      
+      tmp_catalog <- sort_by_criteria(tmp_catalog, input$sort_by)
+      
+      selected_rscs(tmp_catalog)
+      
+      # Reset to first page
+      current_page(1)
+    }
+  })
+  
+  # Search Catalog: Clear sidebar inputs
   # Button for clearing all sidebar inputs
   observeEvent(input$clear, {
     # Reset all of the tags checkboxes
@@ -800,7 +756,7 @@ server <- function(input, output, session) {
     current_page(1)
   })
   
-  # Main output showing resource cards
+  ## Search Catalog: Main output showing resource cards ----
   output$sources_output <- renderUI({
     tmp_catalog <<- selected_rscs()
     
@@ -1015,6 +971,25 @@ server <- function(input, output, session) {
 
   })
   
+  ## Search Catalog: Viewing options ----
+  
+  # Display number of total results and which ones are currently being shown
+  output$num_results <- renderUI({
+    if (input$show_per_page == "All") {
+      div(
+        class = 'showing_n_res',
+        HTML(paste0("<i>Showing all of ", nrow(selected_rscs())," results</i>"))
+      )
+    } else {
+      start_i <- (strtoi(input$show_per_page) * (current_page() - 1) + 1)
+      end_i <- min((strtoi(input$show_per_page) * current_page()), nrow(selected_rscs()))
+      div(
+        class = 'showing_n_res',
+        HTML(paste0("<i>Showing ", start_i,"-", end_i," of ", nrow(selected_rscs())," results</i>"))
+      )
+    }
+  })
+  
   # Display what page user is currently viewing
   output$page_number <- renderUI({
     HTML(paste("Page", current_page(), "of", total_pages()))
@@ -1032,10 +1007,37 @@ server <- function(input, output, session) {
     current_page(page)
   })
   
-  # Functions for each of the resource-specific buttons
+  # Sort the catalog according to some criterion
+  observeEvent(input$sort_by, {
+    tmp <- selected_rscs()
+    
+    # Sort the resources output according to user input
+    tmp <- sort_by_criteria(tmp, input$sort_by)
+    
+    # Update reactive
+    selected_rscs(tmp)
+    
+    # Reset to first page
+    current_page(1)
+  })
+  
+  # Change the number of resources to show on each page
+  observeEvent(input$show_per_page, {
+    if (input$show_per_page != "All") {
+      # Compute how many pages there should be based on user input
+      total_pages(get_num_pages(selected_rscs(), strtoi(input$show_per_page)))
+    } else {
+      # Show all resources on single page
+      total_pages(1)
+    }
+    # Go back to first page if changing the number of resources per page
+    current_page(1)
+  })
+  
+  ## Search Catalog: Functions for each of the resource-specific buttons and features ----
   # Need to apply function up to nrow(full_catalog) because can't access length of page_rscs() outside of render/observe
   lapply(1:nrow(full_catalog), function(i) {
-    # Make resource recommendation boxes
+    ### Resource recommendation boxes ----
     output[[paste0("rsc_recs_", i)]] <- renderUI({
       # Get most similar resources (i.e. all with similarity greater than pre-set threshold)
       rsc_name <- page_rscs()[i, "Name"]
@@ -1111,7 +1113,7 @@ server <- function(input, output, session) {
       }
     })
     
-    # Buttons for each of the resource recs 
+    # Buttons for each of the resource recs
     lapply(1:max_num_recs, function(j) {
       # See full resource info for rec
       observeEvent(input[[paste0("go_to_rec_", i, j)]], {
@@ -1181,7 +1183,7 @@ server <- function(input, output, session) {
       })
     })
     
-    # View methodology data sources
+    ### View methodology data sources ----
     observeEvent(input[[paste0("view_methods_data_", i)]], {
       if (input[[paste0("view_methods_data_", i)]] %% 2 == 1) {
         updateActionLink(
@@ -1254,7 +1256,7 @@ server <- function(input, output, session) {
       })
     })
     
-    # "Save" buttons
+    ### "Save" buttons ----
     observeEvent(input[[paste0("add_to_cart_rsc_", i)]], {
       save_clicked(TRUE)
       tmp <<- shopping_list()
@@ -1263,13 +1265,15 @@ server <- function(input, output, session) {
       shopping_list(tmp)
     })
     
-    # "Remove from Cart" buttons
+    ### "Remove from Cart" buttons (in Saved Resource tab) ----
     observeEvent(input[[paste0("rmv_cart_rsc_", i)]], {
       tmp <- shopping_list()
       tmp <- tmp[-i]
       shopping_list(tmp)
     })
   })
+  
+  ## Search Catalog: Solo pop-up modal buttons ----
   
   # Save button for the solo cards
   observeEvent(input$add_to_cart_solo_card, {
@@ -1285,34 +1289,25 @@ server <- function(input, output, session) {
     card_open("")
   })
   
-  # Sort the catalog according to some criterion
-  observeEvent(input$sort_by, {
-    tmp <- selected_rscs()
-    
-    # Sort the resources output according to user input
-    tmp <- sort_by_criteria(tmp, input$sort_by)
-    
-    # Update reactive
-    selected_rscs(tmp)
-    
-    # Reset to first page
-    current_page(1)
-  })
+  ## Saved Resources: Tab name display ----
   
-  # Change the number of resources to show on each page
-  observeEvent(input$show_per_page, {
-    if (input$show_per_page != "All") {
-      # Compute how many pages there should be based on user input
-      total_pages(get_num_pages(selected_rscs(), strtoi(input$show_per_page)))
+  # Update the "Saved Resources" navbar title whenever someone adds a resource to their cart
+  output$saved_res_title <- renderUI({
+    if (save_clicked()) {
+      "(Saved Resources)" 
     } else {
-      # Show all resources on single page
-      total_pages(1)
+      "Saved Resources"
     }
-    # Go back to first page if changing the number of resources per page
-    current_page(1)
   })
   
-  # Show all saved resources in shopping cart
+  # Reset save_clicked every time the user views their cart
+  observeEvent(input$navbar_tabs, {
+    if (input$navbar_tabs == "saved_res_tab") {
+      save_clicked(FALSE)
+    }
+  })
+  
+  ## Saved Resources: Show all saved resources in shopping cart ----
   output$shopping_cart <- renderUI({
     if (length(shopping_list()) > 0) {
       # Headers
@@ -1323,10 +1318,6 @@ server <- function(input, output, session) {
           rsc_info <- shopping_list()[[rsc_name]]
           rsc_type <- strsplit(rsc_info$Tags, ";")[[1]][1]
           rsc_url <- rsc_info$Link
-          
-          bkgd_color <- "#f0f7ff"  #light blue
-          bord_color <- "#005B94"  #MITRE blue
-          # bord_color <- "#bfddff"
           
           div(
             # Summary resource info (name, type, link)
@@ -1393,6 +1384,8 @@ server <- function(input, output, session) {
     
   })
   
+  ## Saved Resource: Button controls ----
+  
   # Remove all items from the cart
   observeEvent(input$clear_cart, {
     if (length(shopping_list()) > 0) {
@@ -1413,7 +1406,7 @@ server <- function(input, output, session) {
     }
   })
   
-  # Changed mind--do nothing
+  # Changed mind about clearing cart--do nothing
   observeEvent(input$clear_no, {
     removeModal()
   })
@@ -1423,7 +1416,6 @@ server <- function(input, output, session) {
     removeModal()
     shopping_list(list())
   })
-  
   
   # Exports a dataframe of all saved resources and their associated fields to a csv
   observeEvent(input$export_to_csv, {
@@ -1483,9 +1475,7 @@ server <- function(input, output, session) {
       )
     }
   })
-
-
 }
 
-# Run the application 
+# Run the application ----
 shinyApp(ui = ui, server = server)
