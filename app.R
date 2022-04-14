@@ -655,7 +655,7 @@ server <- function(input, output, session) {
     }
     
     # Further filter by geographic level
-    if (!is.null(input$filter_geo_lvls)) {
+    if (!is.null(input$filter_geo_lvls) & nrow(tmp_catalog) > 0) {
       selected_levels <- input$filter_geo_lvls
       
       keep_indices <- c()
