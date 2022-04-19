@@ -317,7 +317,12 @@ ui <- MITREnavbarPage(
   ## About tab ----
   tabPanel(
     title = "About",
-    value = "about_tab"
+    value = "about_tab",
+    
+    htmltools::tags$iframe(src = "about.html",
+                           class="about-panel",
+                           frameborder = 0, 
+                           scrolling = 'auto')
   ),
   
   ## Insights tab ----
