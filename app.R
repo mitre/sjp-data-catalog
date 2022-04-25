@@ -31,10 +31,18 @@ source("utility.R")
 
 ## Catalog data ----
 
+# Use local data or pull from SharePoint?
+local <- TRUE
+
 # Data folder
-data_folder <- file.path(
-  gsub("\\\\","/", gsub("OneDrive - ","", Sys.getenv("OneDrive"))), 
-  "Social Justice Platform WSs - Data Catalog")
+if (local) {
+  data_folder <- file.path("data")
+} else {
+  data_folder <- file.path(
+    gsub("\\\\","/", gsub("OneDrive - ","", Sys.getenv("OneDrive"))), 
+    "Social Justice Platform WSs - Data Catalog")
+}
+
 
 # Read in data from each tab
 path_to_catalog <- file.path(data_folder, "sjp_data_catalog.xlsx")
@@ -112,6 +120,7 @@ for (i in 1:nrow(full_catalog)) {
 }
 # Get max number of recs across all resources for generating buttons in the server
 max_num_recs <- max(num_recs) 
+
 
 
 
@@ -296,17 +305,8 @@ ui <- MITREnavbarPage(
             column(
               width = 12,
               align = "center",
-              actionButton(
-                inputId = "prev_page",
-                label = icon("angle-left"),
-                class = "btn-secondary"
-              ),
-              uiOutput(outputId = "page_number", inline=TRUE),
-              actionButton(
-                inputId = "next_page",
-                label = icon("angle-right"),
-                class = "btn-secondary"
-              )
+
+              uiOutput(outputId = "page_number")
             )
           )
         )
@@ -400,7 +400,7 @@ ui <- MITREnavbarPage(
 # Server ----
 server <- function(input, output, session) {
   ## Define reactives ----
-  
+
   # Current page
   current_page <- reactiveVal(1)
   # Total number of pages to view
@@ -430,7 +430,7 @@ server <- function(input, output, session) {
   
   
   ## Search Catalog: Filter by tags ----
-  
+
   ### Generate collapsible menus for the filter by tag checkboxes ----
   output$filter_tags <- renderUI({
     lapply(tag_types, function(t) {
@@ -977,7 +977,7 @@ server <- function(input, output, session) {
   })
   
   ## Search Catalog: Viewing options ----
-  
+
   # Display number of total results and which ones are currently being shown
   output$num_results <- renderUI({
     if (input$show_per_page == "All") {
@@ -997,7 +997,24 @@ server <- function(input, output, session) {
   
   # Display what page user is currently viewing
   output$page_number <- renderUI({
-    HTML(paste("Page", current_page(), "of", total_pages()))
+    fluidRow(
+      column(
+        width = 12,
+        align = "center",
+        
+        actionButton(
+          inputId = "prev_page",
+          label = icon("angle-left"),
+          class = "btn-secondary"
+        ),
+        HTML(paste("Page", current_page(), "of", total_pages())),
+        actionButton(
+          inputId = "next_page",
+          label = icon("angle-right"),
+          class = "btn-secondary"
+        )
+      )
+    )
   })
   
   # Previous page button
@@ -1037,249 +1054,258 @@ server <- function(input, output, session) {
     }
     # Go back to first page if changing the number of resources per page
     current_page(1)
+    
   })
+
+  ### Search Catalog: Functions for each of the resource-specific buttons and features ----
   
-  ## Search Catalog: Functions for each of the resource-specific buttons and features ----
-  # Need to apply function up to nrow(full_catalog) because can't access length of page_rscs() outside of render/observe
-  lapply(1:nrow(full_catalog), function(i) {
-    ### Resource recommendation boxes ----
-    output[[paste0("rsc_recs_", i)]] <- renderUI({
-      # Get most similar resources (i.e. all with similarity greater than pre-set threshold)
-      rsc_name <- page_rscs()[i, "Name"]
-      recs <- all_rsc_recs[[rsc_name]]
-      
-      if (is.null(recs)) {
-        # Let user know if there are no sources to recommend
-        HTML("<i>No recommended resources to show.</i>")
-        
-      } else {
-        # Create a list containing all of the recommended resource boxes (divs)
-        recs_list <- lapply(1:length(recs), function(j) {
+  withProgress(message = 'Loading resources...', value = 0, {
+    lapply(1:nrow(full_catalog), function(i) {
+
+      incProgress(1/nrow(full_catalog))
+
+      #### Resource recommendation boxes ----
+      # print("rec boxes")
+      output[[paste0("rsc_recs_", i)]] <- renderUI({
+        # Get most similar resources (i.e. all with similarity greater than pre-set threshold)
+        rsc_name <- page_rscs()[i, "Name"]
+        recs <- all_rsc_recs[[rsc_name]]
+
+        if (is.null(recs)) {
+          # Let user know if there are no sources to recommend
+          HTML("<i>No recommended resources to show.</i>")
+
+        } else {
+          # Create a list containing all of the recommended resource boxes (divs)
+          recs_list <- lapply(1:length(recs), function(j) {
+            rec_name <- names(recs[j])
+            # Get lists of shared tags and methodologies for display
+            tags_ij <- shared_tags[rsc_name, rec_name][[1]]
+            methods_ij <- shared_methods[rsc_name, rec_name][[1]]
+
+            # Show 2 lines of the description -- cut off with ... if description exceeds max number of lines (in CSS file)
+            desc <- full_catalog[full_catalog["Name"] == rec_name, ][["Description"]]
+            disp_str <- paste0("<b>", rec_name, "</b><p class='rec_desc'>", desc, "</p>")
+
+            # Display how many tags and methodologies the resource has in common with the rec
+            if (length(tags_ij) > 0) {
+              if (length(tags_ij) == 1) {
+                disp_str <- paste0(disp_str, "<p>", length(tags_ij), " shared tag: ", paste(tags_ij, collapse=", "), "</p>")
+              } else {
+                disp_str <- paste0(disp_str, "<p>", length(tags_ij), " shared tags: ", paste(tags_ij, collapse=", "), "</p>")
+              }
+            }
+
+            if (length(methods_ij) > 0) {
+              if (length(methods_ij) == 1) {
+                disp_str <- paste0(disp_str, "<p>", length(methods_ij), " shared methodology: ", paste(methods_ij, collapse=", "), "</p>")
+              } else {
+                disp_str <- paste0(disp_str, "<p>", length(methods_ij), " shared methodologies: ", paste(methods_ij, collapse=", "), "</p>")
+              }
+            }
+
+            div(
+              # Recommendation box content
+              class = "rec_box",
+              fluidRow(
+                class = "rec_desc_div",
+                column(
+                  width = 12,
+                  HTML(disp_str)
+                )
+              ),
+
+              # "Show rec" and "Save" buttons
+              fluidRow(
+                class = "rec_btns",
+                column(
+                  width = 12,
+                  align = "right",
+                  actionButton(inputId = paste0("go_to_rec_", i, j), label = "Take me here!", class = "btn-secondary"),
+                  actionButton(inputId = paste0("save_rec_", i, j), label = icon("heart"), class = "btn-primary")
+                )
+              )
+            )
+          })
+
+          # Create a horizontal scrolling div with all recommended resources
+          fluidRow(
+            column(
+              width = 12,
+              div(
+                class = "rec_scroll",
+                recs_list
+              )
+            )
+          )
+        }
+      })
+
+      # Buttons for each of the resource recs
+      lapply(1:max_num_recs, function(j) {
+        # See full resource info for rec
+        observeEvent(input[[paste0("go_to_rec_", i, j)]], {
+          # Get name of rec to open
+          rsc_name <- page_rscs()[i, "Name"]
+          recs <- all_rsc_recs[[rsc_name]]
           rec_name <- names(recs[j])
-          # Get lists of shared tags and methodologies for display
-          tags_ij <- shared_tags[rsc_name, rec_name][[1]]
-          methods_ij <- shared_methods[rsc_name, rec_name][[1]]
-          
-          # Show 2 lines of the description -- cut off with ... if description exceeds max number of lines (in CSS file)
-          desc <- full_catalog[full_catalog["Name"] == rec_name, ][["Description"]]
-          disp_str <- paste0("<b>", rec_name, "</b><p class='rec_desc'>", desc, "</p>")
-          
-          # Display how many tags and methodologies the resource has in common with the rec
-          if (length(tags_ij) > 0) {
-            if (length(tags_ij) == 1) {
-              disp_str <- paste0(disp_str, "<p>", length(tags_ij), " shared tag: ", paste(tags_ij, collapse=", "), "</p>")
-            } else {
-              disp_str <- paste0(disp_str, "<p>", length(tags_ij), " shared tags: ", paste(tags_ij, collapse=", "), "</p>")
-            }
-          }
-          
-          if (length(methods_ij) > 0) {
-            if (length(methods_ij) == 1) {
-              disp_str <- paste0(disp_str, "<p>", length(methods_ij), " shared methodology: ", paste(methods_ij, collapse=", "), "</p>")
-            } else {
-              disp_str <- paste0(disp_str, "<p>", length(methods_ij), " shared methodologies: ", paste(methods_ij, collapse=", "), "</p>")
-            }
-          }
-          
-          div(
-            # Recommendation box content
-            class = "rec_box",
-            fluidRow(
-              class = "rec_desc_div",
-              column(
-                width = 12,
-                HTML(disp_str)
-              )
-            ),
-            
-            # "Show rec" and "Save" buttons
-            fluidRow(
-              class = "rec_btns",
-              column(
-                width = 12,
-                align = "right",
-                actionButton(inputId = paste0("go_to_rec_", i, j), label = "Take me here!", class = "btn-secondary"),
-                actionButton(inputId = paste0("save_rec_", i, j), label = icon("heart"), class = "btn-primary")
-              )
+
+          # Update reactive
+          card_open(rec_name)
+
+          # Display solo card for the rec in a modal
+          showModal(
+            modalDialog(
+              class = "card_modal",
+
+              bsCollapse(
+                open = "rec_card",
+                bsCollapsePanel(
+                  title = rec_name,
+                  value = "rec_card",
+                  # Show resource info
+                  HTML(gen_rsc_info(full_catalog[full_catalog["Name"] == rec_name, ])),
+
+                  # Buttons for saving and closing modal
+                  fluidRow(
+                    column(
+                      width = 12,
+                      align = "right",
+                      # Save button
+                      actionButton(
+                        inputId = paste0("add_to_cart_solo_card"),
+                        label = "Save",
+                        icon = icon("heart"),
+                        class = "btn-primary"
+                      ),
+                      # Close button
+                      actionButton(
+                        inputId = paste0("close_solo_card"),
+                        label = "Close",
+                        class = "btn-secondary"
+                      )
+                    )
+                  )
+                )
+              ),
+
+              footer = NULL,
+              easyClose = TRUE,
+              size = 'l',
+              fade = FALSE
+            )
+          )
+
+        })
+
+        # Save the rec
+        observeEvent(input[[paste0("save_rec_", i, j)]], {
+          save_clicked(TRUE)
+          rsc_name <- page_rscs()[i, "Name"]
+          recs <- all_rsc_recs[[rsc_name]]
+
+          tmp <<- shopping_list()
+          rec_name <- names(recs[j])
+          tmp[[rec_name]] <<- full_catalog[full_catalog["Name"] == rec_name, ]
+          shopping_list(tmp)
+        })
+      })
+
+      #### View methodology data sources ----
+      observeEvent(input[[paste0("view_methods_data_", i)]], {
+        if (input[[paste0("view_methods_data_", i)]] %% 2 == 1) {
+          updateActionLink(
+            session = session,
+            inputId = paste0("view_methods_data_", i),
+            icon = icon("caret-down")
+          )
+        } else {
+          updateActionLink(
+            session = session,
+            inputId = paste0("view_methods_data_", i),
+            icon = icon("caret-right")
+          )
+        }
+      })
+
+      # Open solo card for a methodology data source in a modal
+      lapply(1:max_methods_data, function(k) {
+        observeEvent(input[[paste0("go_to_methods_data_", i, k)]], {
+          # Get name of data source to open
+          rsc_name <- page_rscs()[i, "Name"]
+          used_data <- methods_data[methods_data$'Methodology Name' == rsc_name, ]
+          used_data <- used_data[order(used_data$'Dataset Name'), ]
+          methods_data_name <- used_data[[k, "Dataset Name"]]
+
+          # Update reactive
+          card_open(methods_data_name)
+
+          # Display solo card for the rec in a modal
+          showModal(
+            modalDialog(
+              class = "card_modal",
+
+              bsCollapse(
+                open = "methods_data_card",
+                bsCollapsePanel(
+                  title = methods_data_name,
+                  value = "methods_data_card",
+                  # Show resource info
+                  HTML(gen_rsc_info(full_catalog[full_catalog["Name"] == methods_data_name, ])),
+
+                  fluidRow(
+                    column(
+                      width = 12,
+                      align = "right",
+                      # Save button
+                      actionButton(
+                        inputId = paste0("add_to_cart_solo_card"),
+                        label = "Save",
+                        icon = icon("heart"),
+                        class = "btn-primary"
+                      ),
+                      # Close button
+                      actionButton(
+                        inputId = paste0("close_solo_card"),
+                        label = "Close",
+                        class = "btn-secondary"
+                      )
+                    )
+                  )
+                )
+              ),
+
+              footer = NULL,
+              easyClose = TRUE,
+              size = 'l',
+              fade = FALSE
             )
           )
         })
-        
-        # Create a horizontal scrolling div with all recommended resources
-        fluidRow(
-          column(
-            width = 12,
-            div(
-              class = "rec_scroll",
-              recs_list
-            )
-          )
-        )
-      }
-    })
-    
-    # Buttons for each of the resource recs
-    lapply(1:max_num_recs, function(j) {
-      # See full resource info for rec
-      observeEvent(input[[paste0("go_to_rec_", i, j)]], {
-        # Get name of rec to open
-        rsc_name <- page_rscs()[i, "Name"]
-        recs <- all_rsc_recs[[rsc_name]]
-        rec_name <- names(recs[j])
-        
-        # Update reactive
-        card_open(rec_name)
-        
-        # Display solo card for the rec in a modal
-        showModal(
-          modalDialog(
-            class = "card_modal",
-            
-            bsCollapse(
-              open = "rec_card",
-              bsCollapsePanel(
-                title = rec_name,
-                value = "rec_card",
-                # Show resource info
-                HTML(gen_rsc_info(full_catalog[full_catalog["Name"] == rec_name, ])),
-                
-                # Buttons for saving and closing modal
-                fluidRow(
-                  column(
-                    width = 12,
-                    align = "right",
-                    # Save button
-                    actionButton(
-                      inputId = paste0("add_to_cart_solo_card"), 
-                      label = "Save",
-                      icon = icon("heart"),
-                      class = "btn-primary"
-                    ),
-                    # Close button
-                    actionButton(
-                      inputId = paste0("close_solo_card"), 
-                      label = "Close",
-                      class = "btn-secondary"
-                    )
-                  )
-                )
-              )
-            ),
-            
-            footer = NULL,
-            easyClose = TRUE,
-            size = 'l',
-            fade = FALSE
-          )
-        )
-        
       })
-      
-      # Save the rec
-      observeEvent(input[[paste0("save_rec_", i, j)]], {
+
+      #### "Save" buttons ----
+      observeEvent(input[[paste0("add_to_cart_rsc_", i)]], {
         save_clicked(TRUE)
-        rsc_name <- page_rscs()[i, "Name"]
-        recs <- all_rsc_recs[[rsc_name]]
-        
         tmp <<- shopping_list()
-        rec_name <- names(recs[j])
-        tmp[[rec_name]] <<- full_catalog[full_catalog["Name"] == rec_name, ]
+        rsc_name <- page_rscs()[i, "Name"]
+        tmp[[rsc_name]] <<- page_rscs()[i, ]
+        shopping_list(tmp)
+      })
+
+      #### "Remove from Cart" buttons (in Saved Resource tab) ----
+      observeEvent(input[[paste0("rmv_cart_rsc_", i)]], {
+        tmp <- shopping_list()
+        tmp <- tmp[-i]
         shopping_list(tmp)
       })
     })
-    
-    ### View methodology data sources ----
-    observeEvent(input[[paste0("view_methods_data_", i)]], {
-      if (input[[paste0("view_methods_data_", i)]] %% 2 == 1) {
-        updateActionLink(
-          session = session,
-          inputId = paste0("view_methods_data_", i),
-          icon = icon("caret-down")
-        )
-      } else {
-        updateActionLink(
-          session = session,
-          inputId = paste0("view_methods_data_", i),
-          icon = icon("caret-right")
-        )
-      }
-    })
-    
-    # Open solo card for a methodology data source in a modal
-    lapply(1:max_methods_data, function(k) {
-      observeEvent(input[[paste0("go_to_methods_data_", i, k)]], {
-        # Get name of data source to open
-        rsc_name <- page_rscs()[i, "Name"]
-        used_data <- methods_data[methods_data$'Methodology Name' == rsc_name, ]
-        used_data <- used_data[order(used_data$'Dataset Name'), ]
-        methods_data_name <- used_data[[k, "Dataset Name"]]
-        
-        # Update reactive
-        card_open(methods_data_name)
-        
-        # Display solo card for the rec in a modal
-        showModal(
-          modalDialog(
-            class = "card_modal",
-            
-            bsCollapse(
-              open = "methods_data_card",
-              bsCollapsePanel(
-                title = methods_data_name,
-                value = "methods_data_card",
-                # Show resource info
-                HTML(gen_rsc_info(full_catalog[full_catalog["Name"] == methods_data_name, ])),
-                
-                fluidRow(
-                  column(
-                    width = 12,
-                    align = "right",
-                    # Save button
-                    actionButton(
-                      inputId = paste0("add_to_cart_solo_card"), 
-                      label = "Save",
-                      icon = icon("heart"),
-                      class = "btn-primary"
-                    ),
-                    # Close button
-                    actionButton(
-                      inputId = paste0("close_solo_card"), 
-                      label = "Close",
-                      class = "btn-secondary"
-                    )
-                  )
-                )
-              )
-            ),
-            
-            footer = NULL,
-            easyClose = TRUE,
-            size = 'l',
-            fade = FALSE
-          )
-        )
-      })
-    })
-    
-    ### "Save" buttons ----
-    observeEvent(input[[paste0("add_to_cart_rsc_", i)]], {
-      save_clicked(TRUE)
-      tmp <<- shopping_list()
-      rsc_name <- page_rscs()[i, "Name"]
-      tmp[[rsc_name]] <<- page_rscs()[i, ]
-      shopping_list(tmp)
-    })
-    
-    ### "Remove from Cart" buttons (in Saved Resource tab) ----
-    observeEvent(input[[paste0("rmv_cart_rsc_", i)]], {
-      tmp <- shopping_list()
-      tmp <- tmp[-i]
-      shopping_list(tmp)
-    })
+
   })
+
   
   ## Search Catalog: Solo pop-up modal buttons ----
-  
+
   # Save button for the solo cards
   observeEvent(input$add_to_cart_solo_card, {
     save_clicked(TRUE)
@@ -1295,7 +1321,7 @@ server <- function(input, output, session) {
   })
   
   ## Saved Resources: Tab name display ----
-  
+
   # Update the "Saved Resources" navbar title whenever someone adds a resource to their cart
   output$saved_res_title <- renderUI({
     if (save_clicked()) {
@@ -1312,6 +1338,7 @@ server <- function(input, output, session) {
     }
   })
   
+
   ## Saved Resources: Show all saved resources in shopping cart ----
   output$shopping_cart <- renderUI({
     if (length(shopping_list()) > 0) {
@@ -1481,6 +1508,8 @@ server <- function(input, output, session) {
     }
   })
 }
+
+
 
 # Run the application ----
 shinyApp(ui = ui, server = server)
