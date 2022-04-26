@@ -27,7 +27,7 @@ Though there exists other databases and repositories for social justice data, ma
 
 ## Catalog Contents
 
-TBD.
+The SJP Data Catalog contains a total of 98 resources--53 datatsets, 13 data repositories, 19 interactive tools, 6 summary tables, and 7 data methodologies. The resources represented in the catalog are diverse across multiple characteristics with data availability spanning from 1946 to present day and geographic levels as broad as national level and as narrow as zip codes. A total of 66 distinct tags are used to describe the available resources and cover features ranging from topic/subject to data collection method to stratifications. For a more detailed summary of the catalog and its contents, please visit the *Insights* tab.
 
 ------------------------------------------------------------------------
 
