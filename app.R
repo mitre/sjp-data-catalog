@@ -24,6 +24,7 @@ library(rintrojs)
 library(lsa)
 
 
+
 # Data and Utility definitions ----
 
 ## Suporting functions ----
@@ -120,7 +121,6 @@ for (i in 1:nrow(full_catalog)) {
 }
 # Get max number of recs across all resources for generating buttons in the server
 max_num_recs <- max(num_recs) 
-
 
 
 
@@ -1057,7 +1057,7 @@ server <- function(input, output, session) {
     
   })
 
-  ### Search Catalog: Functions for each of the resource-specific buttons and features ----
+  ## Search Catalog: Functions for each of the resource-specific buttons and features ----
   
   withProgress(message = 'Loading resources...', value = 0, {
     lapply(1:nrow(full_catalog), function(i) {
@@ -1079,41 +1079,84 @@ server <- function(input, output, session) {
           # Create a list containing all of the recommended resource boxes (divs)
           recs_list <- lapply(1:length(recs), function(j) {
             rec_name <- names(recs[j])
-            # Get lists of shared tags and methodologies for display
+            # Get description and lists of shared tags and methodologies for display
+            desc <- full_catalog[full_catalog["Name"] == rec_name, ][["Description"]]
             tags_ij <- shared_tags[rsc_name, rec_name][[1]]
             methods_ij <- shared_methods[rsc_name, rec_name][[1]]
 
             # Show 2 lines of the description -- cut off with ... if description exceeds max number of lines (in CSS file)
-            desc <- full_catalog[full_catalog["Name"] == rec_name, ][["Description"]]
-            disp_str <- paste0("<b>", rec_name, "</b><p class='rec_desc'>", desc, "</p>")
+            rec_name_str <- paste0("<b>", rec_name, "</b>")
+            desc_str <- paste0("<p class='rec_desc'>", desc, "</p>")
 
             # Display how many tags and methodologies the resource has in common with the rec
+            shared_elems_str <- ""
             if (length(tags_ij) > 0) {
               if (length(tags_ij) == 1) {
-                disp_str <- paste0(disp_str, "<p>", length(tags_ij), " shared tag: ", paste(tags_ij, collapse=", "), "</p>")
+                shared_elems_str <- paste0(shared_elems_str, length(tags_ij), " shared tag: ", paste(tags_ij, collapse=", "), "<br>")
               } else {
-                disp_str <- paste0(disp_str, "<p>", length(tags_ij), " shared tags: ", paste(tags_ij, collapse=", "), "</p>")
+                shared_elems_str <- paste0(shared_elems_str, length(tags_ij), " shared tags: ", paste(tags_ij, collapse=", "), "<br>")
               }
             }
 
             if (length(methods_ij) > 0) {
               if (length(methods_ij) == 1) {
-                disp_str <- paste0(disp_str, "<p>", length(methods_ij), " shared methodology: ", paste(methods_ij, collapse=", "), "</p>")
+                shared_elems_str <- paste0(shared_elems_str, length(methods_ij), " shared methodology: ", paste(methods_ij, collapse=", "), "<br>")
               } else {
-                disp_str <- paste0(disp_str, "<p>", length(methods_ij), " shared methodologies: ", paste(methods_ij, collapse=", "), "</p>")
+                shared_elems_str <- paste0(shared_elems_str, length(methods_ij), " shared methodologies: ", paste(methods_ij, collapse=", "), "<br>")
               }
             }
+            # Remove the last <br> tag on the string
+            shared_elems_str <- substr(shared_elems_str, 1, nchar(shared_elems_str)-4)
 
             div(
               # Recommendation box content
               class = "rec_box",
+              
               fluidRow(
                 class = "rec_desc_div",
                 column(
                   width = 12,
-                  HTML(disp_str)
+                  HTML(rec_name_str),
+                  
+                  # Shortened rec description with ellipses cutoff
+                  conditionalPanel(
+                    condition = paste0("input.rec_desc_show_more_", i, j, " % 2 == 0"),
+                    HTML(paste0("<p class='rec_desc_part'>", desc, "</p>"))
+                  ),
+                  # Full rec description
+                  conditionalPanel(
+                    condition = paste0("input.rec_desc_show_more_", i, j, " % 2 == 1"),
+                    HTML(paste0("<p class='rec_desc_full'>", desc, "</p>"))
+                  ),
+                  # "Show more" option
+                  actionLink(
+                    inputId = paste0("rec_desc_show_more_", i, j),
+                    label = "Show more",
+                    icon = icon("caret-down")
+                  ),
+                  
+                  br(),
+                  br(),
+                  
+                  # Shortened rec description with ellipses cutoff
+                  conditionalPanel(
+                    condition = paste0("input.rec_shared_elems_show_more_", i, j, " % 2 == 0"),
+                    HTML(paste0("<p class='rec_desc_part'>", shared_elems_str, "</p>"))
+                  ),
+                  # Full rec description
+                  conditionalPanel(
+                    condition = paste0("input.rec_shared_elems_show_more_", i, j, " % 2 == 1"),
+                    HTML(paste0("<p class='rec_desc_full'>", shared_elems_str, "</p>"))
+                  ),
+                  # "Show more" option
+                  actionLink(
+                    inputId = paste0("rec_shared_elems_show_more_", i, j),
+                    label = "Show more",
+                    icon = icon("caret-down")
+                  ),
                 )
               ),
+              
 
               # "Show rec" and "Save" buttons
               fluidRow(
@@ -1143,6 +1186,44 @@ server <- function(input, output, session) {
 
       # Buttons for each of the resource recs
       lapply(1:max_num_recs, function(j) {
+        # Reveal full rec description
+        observeEvent(input[[paste0("rec_desc_show_more_", i, j)]], {
+          if (input[[paste0("rec_desc_show_more_", i, j)]] %% 2 == 1) {
+            updateActionLink(
+              session = session,
+              inputId = paste0("rec_desc_show_more_", i, j),
+              label = "Show less",
+              icon = icon("caret-up")
+            )
+          } else {
+            updateActionLink(
+              session = session,
+              inputId = paste0("rec_desc_show_more_", i, j),
+              label = "Show more",
+              icon = icon("caret-down")
+            )
+          }
+        })
+        
+        # Reveal full lists of shared elements
+        observeEvent(input[[paste0("rec_shared_elems_show_more_", i, j)]], {
+          if (input[[paste0("rec_shared_elems_show_more_", i, j)]] %% 2 == 1) {
+            updateActionLink(
+              session = session,
+              inputId = paste0("rec_shared_elems_show_more_", i, j),
+              label = "Show less",
+              icon = icon("caret-up")
+            )
+          } else {
+            updateActionLink(
+              session = session,
+              inputId = paste0("rec_shared_elems_show_more_", i, j),
+              label = "Show more",
+              icon = icon("caret-down")
+            )
+          }
+        })
+        
         # See full resource info for rec
         observeEvent(input[[paste0("go_to_rec_", i, j)]], {
           # Get name of rec to open
@@ -1507,6 +1588,7 @@ server <- function(input, output, session) {
       )
     }
   })
+
 }
 
 
