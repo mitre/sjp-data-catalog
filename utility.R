@@ -114,8 +114,6 @@ euclidean <- function(x, y) {
 }
 
 
-all_types <- unique(unlist(lapply(strsplit(full_catalog$Tags, '; '), function(x) {x[1]})))
-
 # Computes all the different similarity-related values in one loop (e.g. similarity measure, number of shared tags, list of shared tags, list of shared methodologies)
 # Inputs:
 #   - catalog_features: binary dataframe indicating what features each resource has
@@ -125,7 +123,9 @@ all_types <- unique(unlist(lapply(strsplit(full_catalog$Tags, '; '), function(x)
 #   - count_types: boolean to determine whether to include the data type tags (e.g. dataset, repository, ...) should be counted, default is TRUE
 # Ouptut:
 #   - out: list containing all of the various similarity measure matrices
-get_all_sims <- function(catalog_features, sim_measure, total_tags, total_methods, count_types=TRUE) {
+get_all_sims <- function(full_catalog, catalog_features, sim_measure, total_tags, total_methods, count_types=TRUE) {
+  all_types <- unique(unlist(lapply(strsplit(full_catalog$Tags, '; '), function(x) {x[1]})))
+  
   # Similarity measure
   sim <- data.frame(matrix(nrow = nrow(catalog_features), ncol = nrow(catalog_features)))
   # Lists of shared tags
