@@ -113,15 +113,19 @@ euclidean <- function(x, y) {
   sqrt(sum((x - y)^2))
 }
 
+
 # Computes all the different similarity-related values in one loop (e.g. similarity measure, number of shared tags, list of shared tags, list of shared methodologies)
 # Inputs:
 #   - catalog_features: binary dataframe indicating what features each resource has
 #   - sim_measure: name of similarity measure to use (e.g. "cosine", "euclidean")
 #   - total_tags: total number of tags in catalog
 #   - total_methods: total number of methods in catalog
+#   - count_types: boolean to determine whether to include the data type tags (e.g. dataset, repository, ...) should be counted, default is TRUE
 # Ouptut:
 #   - out: list containing all of the various similarity measure matrices
-get_all_sims <- function(catalog_features, sim_measure, total_tags, total_methods) {
+get_all_sims <- function(full_catalog, catalog_features, sim_measure, total_tags, total_methods, count_types=TRUE) {
+  all_types <- unique(unlist(lapply(strsplit(full_catalog$Tags, '; '), function(x) {x[1]})))
+  
   # Similarity measure
   sim <- data.frame(matrix(nrow = nrow(catalog_features), ncol = nrow(catalog_features)))
   # Lists of shared tags
@@ -153,6 +157,9 @@ get_all_sims <- function(catalog_features, sim_measure, total_tags, total_method
       # Get list of shared tags and assign values to n_tags_shared and tags_shared matrices
       # Tags take up the first n_tags features in the vectors
       tags_overlap <- intersect(colnames(catalog_features)[1:total_tags][as.logical(i_feat[1:total_tags])], colnames(catalog_features)[1:total_tags][as.logical(j_feat[1:total_tags])]) 
+      if (!count_types) {
+        tags_overlap <- tags_overlap[!(tags_overlap %in% all_types)]
+      }
       n_tags_shared[i, j] <- n_tags_shared[j, i] <- length(tags_overlap)
       tags_shared[i, j][[1]] <- tags_shared[j, i][[1]] <- list(tags_overlap)
       
