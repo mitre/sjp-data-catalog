@@ -41,7 +41,9 @@ Users can search by entering keywords into the search bar. This is a free-text f
 
 Another way to search the catalog is through various filters. Users can filter through resources by tags, years, and geographic levels available. The different types of filter categories can be used in conjunction with each other, granting the ability to perform highly customizable searches.
 
-![](media/search.png)
+<center>
+![](media/search.png){width=75%}
+</center>
 
 ### Viewing the catalog
 
@@ -53,13 +55,17 @@ There are multiple options for viewing the selected resources in order to help u
   
 Users can also control the number of resources to show per page and can navigate through the pages to see more resources.
 
-![](media/view_options.png)
+<center>
+![](media/view_options.png){width=75%}
+</center>
 
 ### Recommended resources
 
 Another key feature of the catalog is its ability to recommend similar resources to the user based on the results from their search criteria. Each of the individual resource entries have a toggle at the bottom of its card which, when switched on, will reveal (if any) recommended sources which share similar features to the original resource. A brief description of each recommendation is provided as well as lists of shared features between the two resources. Furthermore, below these descriptions are two buttons which allow users to view full details of the recommended resource or save the recommendation directly to their “Saved Resources” page. 
 
-![](media/recs.png)
+<center>
+![](media/recs.png){width=75%}
+</center>
 
 ### Saving resources
 
@@ -67,7 +73,9 @@ As users navigate through the dashboard and explore relevant data sources, they 
 
 Once users are satisfied with their collection of saved resources, they can use the “Export to…” feature to export their curated data repository as either a CSV file or a PDF report. Alternatively, if the user would like to clear their cart and start over, this can be accomplished by clicking the “Remove All” button in the top right-hand corner of the page.
 
-![](media/save_res.png)
+<center>
+![](media/save_res.png){width=75%}
+</center>
 
 
 ------------------------------------------------------------------------
