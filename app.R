@@ -339,7 +339,11 @@ ui <- MITREnavbarPage(
   ## Insights tab ----
   tabPanel(
     title = "Insights",
-    value = "insights_tab"
+    value = "insights_tab",
+    
+    h1("Insights"),
+    
+    HTML("<i>some description about the catalog and its novelty/usefulness</i>")
   ),
   
   ## Saved Resources tab ----
@@ -436,8 +440,8 @@ server <- function(input, output, session) {
   # Keep track of what solo recommended resource card is open
   card_open <- reactiveVal("")
   
-  # Keep track of whether a new item has been added to the cart since the last time the cart was viewed
-  save_clicked <- reactiveVal(FALSE)
+  # Keep track of how many new items have been added to the cart since the last time the cart was viewed
+  new_saved <- reactiveVal(0)
   
   
   ## Search Catalog: Filter by tags ----
@@ -1078,12 +1082,15 @@ server <- function(input, output, session) {
       # Get corresponding indices
       rsc_i <- strtoi(tail(strsplit(input$changed, "_")[[1]], n=1))
       
-      # Add resource to shopping list
-      save_clicked(TRUE)
-      tmp <<- shopping_list()
+      # Add resource to shopping list if not already in list
       rsc_name <- page_rscs()[rsc_i, "Name"]
-      tmp[[rsc_name]] <<- page_rscs()[rsc_i, ]
-      shopping_list(tmp)
+      if (!(rsc_name %in% names(shopping_list()))) {
+        tmp <<- shopping_list()
+        
+        tmp[[rsc_name]] <<- page_rscs()[rsc_i, ]
+        shopping_list(tmp)
+        new_saved(new_saved() + 1)
+      }
     }
     
   }, ignoreInit = TRUE)
@@ -1318,16 +1325,18 @@ server <- function(input, output, session) {
       rsc_i <- strtoi(tail(strsplit(input$changed, "_")[[1]], n=2)[1])
       rec_j <- strtoi(tail(strsplit(input$changed, "_")[[1]], n=2)[2])
     
-      # Get name of main resource and all of its recommended sources
-      save_clicked(TRUE)
+      # Get name of main resource and the name of the rec
       rsc_name <- page_rscs()[rsc_i, "Name"]
       recs <- all_rsc_recs[[rsc_name]]
+      rec_name <- names(recs[rec_j])
       
       # Add the recommended source to the shopping list
-      tmp <<- shopping_list()
-      rec_name <- names(recs[rec_j])
-      tmp[[rec_name]] <<- full_catalog[full_catalog["Name"] == rec_name, ]
-      shopping_list(tmp)
+      if (!(rec_name %in% names(shopping_list()))) {
+        tmp <<- shopping_list()
+        tmp[[rec_name]] <<- full_catalog[full_catalog["Name"] == rec_name, ]
+        shopping_list(tmp)
+        new_saved(new_saved() + 1)
+      }
     }
   })
 
@@ -1464,10 +1473,15 @@ server <- function(input, output, session) {
 
   # Save button for the solo cards
   observeEvent(input$add_to_cart_solo_card, {
-    save_clicked(TRUE)
-    tmp <<- shopping_list()
-    tmp[[card_open()]] <<- full_catalog[full_catalog["Name"] == card_open(), ]
-    shopping_list(tmp)
+    card_name <- card_open()
+    
+    # Add the recommended source to the shopping list
+    if (!(card_name %in% names(shopping_list()))) {
+      tmp <<- shopping_list()
+      tmp[[card_name]] <<- full_catalog[full_catalog["Name"] == card_name, ]
+      shopping_list(tmp)
+      new_saved(new_saved() + 1)
+    }
   })
   
   # Close button for the solo cards
@@ -1480,17 +1494,17 @@ server <- function(input, output, session) {
 
   # Update the "Saved Resources" navbar title whenever someone adds a resource to their cart
   output$saved_res_title <- renderUI({
-    if (save_clicked()) {
-      "(Saved Resources)" 
+    if (new_saved() > 0) {
+      paste0("Saved Resources (", new_saved(), ")") 
     } else {
       "Saved Resources"
     }
   })
   
-  # Reset save_clicked every time the user views their cart
+  # Reset new_saved every time the user views their cart
   observeEvent(input$navbar_tabs, {
     if (input$navbar_tabs == "saved_res_tab") {
-      save_clicked(FALSE)
+      new_saved(0)
     }
   })
   
