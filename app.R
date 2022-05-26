@@ -25,6 +25,7 @@ library(lsa)
 library(plotly)
 library(reticulate)
 library(sendmailR)
+library(d3wordcloud)
 
 
 
@@ -127,33 +128,7 @@ max_num_recs <- max(num_recs)
 
 ## Analytics for Insights tab ----
 
-all_types <- unlist(lapply(strsplit(full_catalog$Tags, '; '), function(x) {x[1]}))
-type_counts <- sort(table(all_types), decreasing = TRUE)
-
-all_years <- c()
-for (i in 1:nrow(full_catalog)) {
-  i_yr_val <- full_catalog[i, "Years_Available"]
-  # Ignore if year data is missing or has string inputs (e.g. "N/A", "Varies")
-  if (!(is.na(i_yr_val)) & i_yr_val != "N/A" & !(grepl("Varies", i_yr_val))) {
-    # Remove any characters between parentheses and remove any trailing whitespace
-    i_yr_str <- trimws(gsub("\\(.*\\)", "", strsplit(i_yr_val, ",")[[1]]))
-    # Figure out of selected years overlaps with years available of selected resources
-    i_yrs <- unlist(lapply(i_yr_str, function(y) {
-      rng <- strtoi(strsplit(y, "-")[[1]])
-      if (length(rng) == 2) {
-        seq.int(rng[1], rng[2])
-      } else {#length(rng) == 1
-        rng[1]
-      }
-    }))
-    all_years <- c(all_years, i_yrs)
-  } 
-}
-year_counts <- table(all_years)
-
-tag_counts <- table(unlist(strsplit(full_catalog$Tags, '; ')))
-types <- names(type_counts)
-tag_counts <- tag_counts[!(names(tag_counts) %in% types)]
+# set.seed(1234) # for wordcloud reproducibility 
 
 
 
@@ -441,50 +416,17 @@ ui <- MITREnavbarPage(
         
         p("You can choose to explore analyses for the whole SJP data catalog or for just your saved resources."),
         
-        bsButton(
-          inputId = "insights_view_catalog",
-          label = "View Catalog",
-          class = "btn-primary"
-        ),
-        bsButton(
-          inputId = "insights_view_cart",
-          label = "View Saved Resources",
-          class = "btn-secondary"
+        br(),
+        
+        radioGroupButtons(
+          inputId = "insights_view",
+          choices = c("View Catalog", "View Saved Resources"),
+          selected = "View Catalog"
         ),
         
-        # actionGroupButtons(
-        #   inputIds = c("btn1", "btn2", "btn3"),
-        #   labels = list("Action 1", "Action 2", tags$span(icon("cog"), "Action 3")),
-        #   status = "primary"
-        # ),
+        uiOutput(outputId = "insights_main"),
         
-        h2("Catalog Summary"),
-        
-        #Section description
-        p("[section blurb]"),
-        
-        uiOutput(outputId = "insights_summary"),
-        
-        h2("Catalog Connections"),
-        
-        #Section description
-        p("[section blurb]"),
-        
-        uiOutput(outputId = "insights_connections")
-        
-        # h2("Cluster Identification"),
-        # 
-        # #Section description
-        # p("Infinite mixture models are a class of clustering algorithms which do not presuppose or limit the number of resulting 
-        #   clusters. They are useful in situations where the true number of clusters is unknown because they assume an infinite 
-        #   number of latent clusters and thus allow the data to endogenously determine the number of clusters. The specific model 
-        #   applied to the SJP catalog metadata is the Beta-Bernoulli Dirichlet Process Mixture Model. This model intakes each data 
-        #   point as a binary features vector, indicating whether each datum carries a certain feature or now, and identifies clusters 
-        #   of data based on shared features."),
-        # 
-        # uiOutput(outputId = "insights_clusters")
-        
-        ),
+      ),
       
       # Right-side padding
       column(width = 2)
@@ -496,11 +438,6 @@ ui <- MITREnavbarPage(
     title = "About",
     value = "about_tab",
     
-    # htmltools::tags$iframe(src = "about.html",
-    #                        class="about-panel",
-    #                        frameborder = 0, 
-    #                        scrolling = 'auto')
-    
     fluidRow(
       # Left-side padding
       column(width = 2),
@@ -509,6 +446,27 @@ ui <- MITREnavbarPage(
         width = 8,
         
         h1("The Social Justice Platform Data Catalog"),
+        
+        h2("Overview"),
+        
+        HTML('<ol type="I">
+                <li>Introduction</li>
+                  <ol type="i">
+                      <li>What is the Social Justice Platform Data Catalog?</li>
+                      <li>Benefits of this catalog</li>
+                  </ol>
+                <li>Catalog Contents</li>
+                <li>How to Use the Catalog</li>
+                  <ol type="i">
+                      <li>Search the catalog</li>
+                      <li>Viewing the catalog</li>
+                      <li>Resource recommendations</li>
+                      <li>Saving resources</li>
+                  </ol>
+                <li>Contact Us</li>
+             </ol>'),
+        
+        hr(),
         
         h2("Introduction"),
         
@@ -535,12 +493,12 @@ ui <- MITREnavbarPage(
         
         h2("Catalog Contents"),
         
-        p("The SJP Data Catalog contains a total of 98 resources--53 datatsets, 13 data repositories, 19 interactive tools, 
+        HTML("<p>The SJP Data Catalog contains a total of 98 resources--53 datatsets, 13 data repositories, 19 interactive tools, 
         6 summary tables, and 7 data methodologies. The resources represented in the catalog are diverse across multiple 
         characteristics with data availability spanning from 1946 to present day and geographic levels as broad as national level 
         and as narrow as zip codes. A total of 66 distinct tags are used to describe the available resources and cover features 
         ranging from topic/subject to data collection method to stratifications. For a more detailed summary of the catalog and 
-        its contents, please visit the *Insights* tab."),
+        its contents, please visit the <i>Insights</i> tab.</p>"),
         
         hr(),
         
@@ -578,7 +536,7 @@ ui <- MITREnavbarPage(
         img(src='about/view_options.png', align = "center", width="75%"),
         HTML("</center>"),
         
-        h3("Recommended resources"),
+        h3("Resource recommendations"),
         
         p("Another key feature of the catalog is its ability to recommend similar resources to the user based on the results from 
         their search criteria. Each of the individual resource entries have a toggle at the bottom of its card which, when switched 
@@ -614,7 +572,9 @@ ui <- MITREnavbarPage(
         
         h2("Contact Info"),
         
-        p("Please visit the *Contact Us* tab for more information about how to get in contact with the SJP Data Catalog team.")
+        HTML('<p>For more information about the SJP Data Catalog, please contact Hannah De los Santos at 
+        <a href="mailto:hdelossantos@mitre.org">hdelossantos@mitre.org</a> or the Social Justice Platform at 
+        <a href="mailto:socialjustice@mitre.org">socialjustice@mitre.org</a>, or visit the <i>Contact Us</i> tab.</p>')
         
       ),
       
@@ -638,35 +598,13 @@ ui <- MITREnavbarPage(
         h1("Contact Us"),
         
         br(),
-        
-        p("If you have any questions, suggestions, or would like to make contributions to the SJP Data Catalog, please feel free to 
-              email hdelossantos@mitre.org or socialjustice@mitre.org directly or use the provided form to get in contact with us."),
-        
-        hr(),
-        
-        textInput(
-          inputId = "email_address",
-          label = "Your email address:",
-          placeholder = "example@mail.com",
-        ),
-        
-        textInput(
-          inputId = "email_topic",
-          label = "Topic:"
-        ),
-        
-        textAreaInput(
-          inputId = "email_message",
-          label = "Message:",
-          width = "600px",
-          height = "300px"
-        ),
-        
-        actionButton(
-          inputId = "email_send",
-          label = "Send",
-          class = "btn-primary"
-        )
+
+        HTML('<p>If you have any questions, suggestions, or would like to make contributions to the SJP Data Catalog, feel free to 
+             contact Hannah De los Santos at <a href="mailto:hdelossantos@mitre.org">hdelossantos@mitre.org</a> or the Social Justice Platform 
+             at <a href="mailto:socialjustice@mitre.org">socialjustice@mitre.org</a>.</p>
+             
+             <p>Please make sure to include "SJP Data Catalog" in the subject line of your email to indicate that your inquiry is related to 
+             this data catalog.</p>'),
        
       ),
       
@@ -707,13 +645,15 @@ server <- function(input, output, session) {
   # Keep track of what solo recommended resource card is open
   card_open <- reactiveVal("")
   
-  # Current view of Insights tab
-  insights_view <- reactiveVal("catalog")
-  
   # For Insights tab--all choices for displaying certain figures/graphs
   insights_summary_choice <- reactiveVal("Type")
   insights_connections_choice <- reactiveVal("Type")
   # insights_cluster_choice <- reactiveVal("Type")
+  insights_full_set <- reactiveVal(full_catalog)
+  insights_filtered_set <- reactiveVal(full_catalog)
+  type_counts <- reactiveVal(get_type_dist(full_catalog))
+  year_counts <- reactiveVal(get_year_dist(full_catalog))
+  tags_counts <- reactiveVal(get_tags_dist(full_catalog))
   
   
   ## Search Catalog: Filter by tags ----
@@ -811,7 +751,7 @@ server <- function(input, output, session) {
     })
   })
   
-  ### Toggle the carets on the checkbox menu labels ----
+  ### Toggle the carets on the checkbox menu labels in the "Search Catalog" ----
   lapply(tag_types, function(t) {
     # Labels for tag types
     observeEvent(input[[paste("label", gsub(" ", "_", t), sep = "_")]], {
@@ -1942,19 +1882,81 @@ server <- function(input, output, session) {
   
   ## Insights: Switch view ----
   
-  observeEvent(input$insights_view_catalog, {
-    insights_view("catalog")
+  observeEvent(input$insights_view, {
+    # Determine which set of resources to perform analytics on
+    if (input$insights_view == "View Catalog") {
+      insights_full_set(full_catalog)
+    } else {#(input$insights_view == "View Saved Resources")
+      shopping_list_df <<- as.data.frame(do.call(rbind, shopping_list()))
+      insights_full_set(shopping_list_df)
+    }
+    
+    # Reset all of the tags checkboxes
+    for (t in tag_types) {
+      if (t != "Resource Type") {
+        subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
+        
+        if (all(is.na(subcats))) {
+          updateCheckboxGroupInput(
+            session, 
+            inputId = paste0("insights_", gsub(" ", "_", t)), 
+            selected = FALSE
+          )
+        } else {
+          for (s in subcats) {
+            if (is.na(s)) {
+              s <- "Other"
+            }
+            
+            updateCheckboxGroupInput(
+              session, 
+              inputId = paste0("insights_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--")), 
+              selected = FALSE
+            )
+          }
+        }
+      }
+    }
+
+    # Recompute data for graphs
+    type_counts(get_type_dist(insights_full_set()))
+    year_counts(get_year_dist(insights_full_set()))
+    tags_counts(get_tags_dist(insights_full_set()))
   })
   
-  observeEvent(input$insights_view_cart, {
-    insights_view("cart")
+  observeEvent(shopping_list(), {
+    # If there are no things in the shopping cart, disable that option from the Insights tab and switch back to Catalog view
+    if (length(shopping_list()) > 0) {
+      updateRadioGroupButtons(
+        session,
+        inputId = "insights_view",
+        disabledChoices = c()
+      )
+      
+      # If the shopping list changes while in the Saved Resources view, make sure to update the graphics accordingly
+      if (input$insights_view == "View Saved Resources"){
+        shopping_list_df <- as.data.frame(do.call(rbind, shopping_list()))
+        insights_full_set(shopping_list_df)
+        
+        # Recompute data for graphs
+        type_counts(get_type_dist(insights_full_set()))
+        year_counts(get_year_dist(insights_full_set()))
+        tags_counts(get_tags_dist(insights_full_set()))
+      }
+    } else {
+      updateRadioGroupButtons(
+        session,
+        inputId = "insights_view",
+        selected = "View Catalog",
+        disabledChoices = c("View Saved Resources")
+      )
+    }
   })
   
-  ## Insights: Interactive Sections ----
+  ## Insights: Interactive Section ----
   
-  ### Catalog summary ----
-  # Generate collapsible menus for the filter by tag checkboxes
-  output$insights_summary_filter <- renderUI({
+  ### Generate collapsible menus for the filter by tag checkboxes ----
+  output$insights_filter <- renderUI({
     lapply(tag_types, function(t) {
       if (t != "Resource Type") {
         tags <- list_of_tags[list_of_tags$'Tag Type' == t, ]
@@ -1965,21 +1967,21 @@ server <- function(input, output, session) {
           # Overarching tag types
           class = 'tag_group_label',
           actionLink(
-            inputId = paste0("ins_sum_label_", gsub(" ", "_", t)), 
+            inputId = paste0("insights_label_", gsub(" ", "_", t)), 
             label = t, 
             icon("caret-right")
           ),
           
           # Show/hide the info within each tag type
           conditionalPanel(
-            condition = paste0("input.ins_sum_label_", gsub(" ", "_", t)," % 2 == 1"),
+            condition = paste0("input.insights_label_", gsub(" ", "_", t)," % 2 == 1"),
             
             if (all(is.na(subcats))) {
               # If there are no subcategories, just show the checkbox group
               div(
                 class = 'tag_chkbox',
                 checkboxGroupInput(
-                  inputId = paste0("ins_sum_", gsub(" ", "_", t)),
+                  inputId = paste0("insights_", gsub(" ", "_", t)),
                   label = NULL,
                   selected = NULL,
                   choiceNames = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)]),
@@ -1997,16 +1999,16 @@ server <- function(input, output, session) {
                     div(
                       class = 'tag_group_label',
                       actionLink(
-                        inputId = paste("ins", "sum", "label", gsub(" ", "_", t), "Other", sep = "_"),
+                        inputId = paste("insights", "label", gsub(" ", "_", t), "Other", sep = "_"),
                         label = "Other",
                         icon("caret-right")
                       ),
                       conditionalPanel(
-                        condition = paste0("input.ins_sum_label_", gsub(" ", "_", t), "_Other", " % 2 == 1"),
+                        condition = paste0("input.insights_label_", gsub(" ", "_", t), "_Other", " % 2 == 1"),
                         div(
                           class = 'tag_chkbox',
                           checkboxGroupInput(
-                            inputId = paste0("ins_sum_", paste(gsub(" ", "_", t), "Other", sep = "--")),
+                            inputId = paste0("insights_", paste(gsub(" ", "_", t), "Other", sep = "--")),
                             label = NULL,
                             selected = NULL,
                             choiceNames = sort(tags$Tags[is.na(tags$'Subcategory')]),
@@ -2020,16 +2022,16 @@ server <- function(input, output, session) {
                     div(
                       class = 'tag_group_label',
                       actionLink(
-                        inputId = paste("ins", "sum", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
+                        inputId = paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
                         label = s,
                         icon("caret-right")
                       ),
                       conditionalPanel(
-                        condition = paste0("input.ins_sum_label_", gsub(" ", "_", t), "_", gsub(" ", "_", s), " % 2 == 1"),
+                        condition = paste0("input.insights_label_", gsub(" ", "_", t), "_", gsub(" ", "_", s), " % 2 == 1"),
                         div(
                           class = 'tag_chkbox',
                           checkboxGroupInput(
-                            inputId = paste0("ins_sum_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--")),
+                            inputId = paste0("insights_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--")),
                             label = NULL,
                             selected = NULL,
                             choiceNames = sort(tags$Tags[which(tags$'Subcategory' == s)]),
@@ -2044,196 +2046,183 @@ server <- function(input, output, session) {
             }
           )
         )
-        
       }
     })
   })
   
-  output$insights_summary <- renderUI({
-    fluidRow(
-      # Controls/options
-      column(
-        width = 2,
-        class = 'insights_options',
-        
-        uiOutput(outputId = "insights_summary_filter"),
-        br(),
-        
-        fluidRow(
-          column(
-            width = 12,
-            align = 'center',
-            actionButton(
-              inputId = "insights_summary_go",
-              label = "Go",
-              class = "btn-primary"
-            )
+  ### Toggle the carets on the checkbox menu labels in the "Insights" tabs ----
+  lapply(tag_types, function(t) {
+    if (t != "Resource Type") {
+      # Labels for tag types
+      observeEvent(input[[paste("insights", "label", gsub(" ", "_", t), sep = "_")]], {
+        if (input[[paste("insights", "label", gsub(" ", "_", t), sep = "_")]] %% 2 == 1) {
+          updateActionLink(
+            session = session,
+            inputId = paste("insights", "label", gsub(" ", "_", t), sep = "_"),
+            icon = icon("caret-down")
           )
-        )
-      ),
+        } else {
+          updateActionLink(
+            session = session,
+            inputId = paste("insights", "label", gsub(" ", "_", t), sep = "_"),
+            icon = icon("caret-right")
+          )
+        }
+      })
       
-      # Plot output area
-      column(
-        width = 10,
-        
-        plotlyOutput(
-          outputId = "insights_summary_plot",
-          height = '400px'
-        )
-      )
-    )
-  })
-  
-  observeEvent(input$insights_summary_go, {
-    # insights_summary_choice(input$insights_summary_options)
-  })
-  
-  output$insights_summary_plot <- renderPlotly({
-    plot_ly()
-    # if (insights_summary_choice() == "Type") {
-    #   fig <- plot_ly(
-    #     x = names(type_counts),
-    #     y = type_counts,
-    #     type = "bar",
-    #   )
-    #   fig <- fig %>% layout(title = "Resource Types", yaxis = list(title = "Count"))
-    #   
-    # } else if (insights_summary_choice() == "Year") {
-    #   fig <- plot_ly(
-    #     x = names(year_counts),
-    #     y = year_counts,
-    #     type = "bar"
-    #   )
-    #   fig <- fig %>% layout(title = "Years Available", yaxis = list(title = "Count"))
-    #   
-    # } else {# if (insights_summary_choice() == "Tags")
-    #   fig <- plot_ly(
-    #     x = names(tag_counts),
-    #     y = tag_counts,
-    #     type = "bar",
-    #   )
-    #   fig <- fig %>% layout(
-    #     title = "Tags Distribution",
-    #     xaxis = list(tickangle = 45, tickmode = "linear", tickfont = list(size = 10)),
-    #     yaxis = list(title = "Count"))
-    # }
-    # 
-    # return(fig)
-  })
-  
-  ### Catalog connections ----
-  # Generate collapsible menus for the filter by tag checkboxes
-  output$insights_connections_filter <- renderUI({
-    lapply(tag_types, function(t) {
-      tags <- list_of_tags[list_of_tags$'Tag Type' == t, ]
-      subcats <- sort(unique(tags$Subcategory), na.last = TRUE)
+      # Labels for any subcategories
+      subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
       
-      # Display checkbox groups for each subcategory within each tag type
-      div(
-        # Overarching tag types
-        class = 'tag_group_label',
-        actionLink(
-          inputId = paste0("ins_con_label_", gsub(" ", "_", t)), 
-          label = t, 
-          icon("caret-right")
-        ),
-        
-        # Show/hide the info within each tag type
-        conditionalPanel(
-          condition = paste0("input.ins_con_label_", gsub(" ", "_", t)," % 2 == 1"),
+      # If there are no subcategories, don't need to do anything more, so just checking for tag types with subcategories
+      if (!all(is.na(subcats))) {
+        lapply(subcats, function(s) {
+          if (is.na(s)) {
+            s <- "Other"
+          }
           
-          if (all(is.na(subcats))) {
-            # If there are no subcategories, just show the checkbox group
-            div(
-              class = 'tag_chkbox',
-              checkboxGroupInput(
-                inputId = paste0("ins_con_", gsub(" ", "_", t)),
-                label = NULL,
-                selected = NULL,
-                choiceNames = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)]),
-                choiceValues = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)])
+          # Toggle the carets on the checkbox menu labels
+          observeEvent(input[[paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_")]], {
+            if (input[[paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_")]] %% 2 == 1) {
+              updateActionLink(
+                session = session,
+                inputId = paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
+                icon = icon("caret-down")
               )
-            )
+            } else {
+              updateActionLink(
+                session = session,
+                inputId = paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
+                icon = icon("caret-right")
+              )
+            }
+          })
+        })
+      }
+    }
+  })
+  
+  ### Filter Insights output according to selected checkboxes ----
+  observeEvent(input$insights_go, {
+    insights_filtered_set <- insights_full_set()
+    
+    # Update selected tags on button press
+    selected_tags <-
+      lapply(tag_types, function(t) {
+        # Want to group tags from the subcategories together to pass to selected_tags
+        subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
+        select_tags_type <- c()
+        if (all(is.na(subcats))) {
+          # If there are no subcategories, checkbox group ID is just the 
+          select_tags_type <- c(select_tags_type, input[[paste0("insights_", gsub(" ", "_", t))]])
+        } else {
+          for (s in subcats) {
+            if (is.na(s)) {
+              s <- "Other"
+            }
             
-          } else {
-            # Show subcategories within each tag type
-            div(
-              class = 'tag_subcat', 
-              lapply(subcats, function(s) {
-                if (is.na(s)) {
-                  # Assign any tags without a subcategory to "Other"
-                  div(
-                    class = 'tag_group_label',
-                    actionLink(
-                      inputId = paste("ins", "con", "label", gsub(" ", "_", t), "Other", sep = "_"),
-                      label = "Other",
-                      icon("caret-right")
-                    ),
-                    conditionalPanel(
-                      condition = paste0("input.ins_con_label_", gsub(" ", "_", t), "_Other", " % 2 == 1"),
-                      div(
-                        class = 'tag_chkbox',
-                        checkboxGroupInput(
-                          inputId = paste0("ins_con_", paste(gsub(" ", "_", t), "Other", sep = "--")),
-                          label = NULL,
-                          selected = NULL,
-                          choiceNames = sort(tags$Tags[is.na(tags$'Subcategory')]),
-                          choiceValues = sort(tags$Tags[is.na(tags$'Subcategory')])
-                        )
-                      )
-                    )
-                  )
-                } else {
-                  # Otherwise group tags together by their designated subcategory
-                  div(
-                    class = 'tag_group_label',
-                    actionLink(
-                      inputId = paste("ins", "con", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
-                      label = s,
-                      icon("caret-right")
-                    ),
-                    conditionalPanel(
-                      condition = paste0("input.ins_con_label_", gsub(" ", "_", t), "_", gsub(" ", "_", s), " % 2 == 1"),
-                      div(
-                        class = 'tag_chkbox',
-                        checkboxGroupInput(
-                          inputId = paste0("ins_con_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--")),
-                          label = NULL,
-                          selected = NULL,
-                          choiceNames = sort(tags$Tags[which(tags$'Subcategory' == s)]),
-                          choiceValues = sort(tags$Tags[which(tags$'Subcategory' == s)])
-                        )
-                      )
-                    )
-                  )
-                }
-              })
+            select_tags_type <- c(select_tags_type, input[[paste0("insights_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--"))]])
+          }
+        }
+        
+        return(select_tags_type)
+      })
+    
+    # Update names of the list to be each of the tag types
+    selected_tags <- setNames(selected_tags, tag_types)
+    
+    # Get sources with the selected tags
+    if (!is.null(unlist(selected_tags))) {
+      # Filter according to each type of tag
+      for (tag_type in names(selected_tags)) {
+        if (!is.null(selected_tags[[tag_type]])) {
+          # Get user-selected tags for this tag type
+          get_select <- selected_tags[[tag_type]]
+          
+          # Remove any entries that don't align with the selected tags
+          keep_indices <- c()
+          for (i in 1:nrow(tmp_catalog)) {
+            # Get tags for i-th entry
+            i_tags <- strsplit(tmp_catalog[i, "Tags"], ";")[[1]]
+            i_tags <- trimws(i_tags)
+            # If i-th resource is not of the selected tag types, remove it from catalog
+            if (length(intersect(get_select, i_tags)) > 0) {
+              keep_indices <- c(keep_indices, i)
+            } 
+          }
+          insights_filtered_set <- insights_filtered_set[keep_indices,]
+        }
+      }
+    }
+    
+    # Analytics for Insights tab based on view
+    type_counts(get_type_dist(insights_filtered_set))
+    year_counts(get_year_dist(insights_filtered_set))
+    tags_counts(get_tags_dist(insights_filtered_set))
+  })
+  
+  ### Clear filters on Insights page ----
+  observeEvent(input$insights_clear, {
+    # Reset all of the tags checkboxes
+    for (t in tag_types) {
+      if (t != "Resource Type") {
+        subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
+        
+        if (all(is.na(subcats))) {
+          updateCheckboxGroupInput(
+            session, 
+            inputId = paste0("insights_", gsub(" ", "_", t)), 
+            selected = FALSE
+          )
+        } else {
+          for (s in subcats) {
+            if (is.na(s)) {
+              s <- "Other"
+            }
+            
+            updateCheckboxGroupInput(
+              session, 
+              inputId = paste0("insights_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--")), 
+              selected = FALSE
             )
           }
-        )
-      )
-    })
+        }
+      }
+    }
+    
+    # Recompute data for graphs
+    type_counts(get_type_dist(insights_full_set()))
+    year_counts(get_year_dist(insights_full_set()))
+    tags_counts(get_tags_dist(insights_full_set()))
   })
   
-  output$insights_connections <- renderUI({
+  ### Main Insights section with interactive plots ----
+  output$insights_main <- renderUI({
     fluidRow(
       # Controls/options
       column(
         width = 2,
         class = 'insights_options',
         
-        uiOutput(outputId = "insights_connections_filter"),
+        uiOutput(outputId = "insights_filter"),
         br(),
         
         fluidRow(
           column(
             width = 12,
             align = 'center',
+            
             actionButton(
-              inputId = "insights_connections_go",
+              inputId = "insights_go",
               label = "Go",
               class = "btn-primary"
+            ),
+            
+            actionButton(
+              inputId = "insights_clear",
+              label = "Clear",
+              class = "btn-secondary"
             )
+            
           )
         )
       ),
@@ -2242,58 +2231,131 @@ server <- function(input, output, session) {
       column(
         width = 10,
         
-        HTML("TBD")
+        tabsetPanel(
+          type = "tabs",
+          id = "insight_plot_tabs",
+          
+          tabPanel(
+            title = "Catalog Summary",
+            value = "insights_summary_tab",
+            
+            # d3wordcloudOutput(
+            #   outputId = "insights_summary_wordcloud"
+            # ),
+            
+            br(),
+            
+            plotlyOutput(
+              outputId = "insights_summary_type_plot",
+              height = '400px'
+            ),
+            
+            plotlyOutput(
+              outputId = "insights_summary_year_plot",
+              height = '400px'
+            ),
+            
+            plotlyOutput(
+              outputId = "insights_summary_tags_plot",
+              height = '400px'
+            ),
+          ),
+          
+          tabPanel(
+            title = "Catalog Connections", 
+            value = "insights_connections_tab",
+            
+            br(),
+            
+            HTML("<p><i>More coming soon...</i></p>")
+            
+            # plotlyOutput(
+            #   outputId = "insights_connections_plot",
+            #   height = "400px"
+            # )
+          )
+        )
       )
     )
   })
   
-  ### Cluster identification ----
+  # Tags wordcloud
+  output$insights_summary_wordcloud <- renderD3wordcloud({
+    d3wordcloud(
+      words = names(tags_counts()), 
+      freq = tags_counts(), 
+      rotate.min = -45,           
+      rotate.max = 45,
+      tooltip = TRUE,
+      font = "Arial",
+      spiral = "rectangular"
+    )
+    
+  })
   
-  # output$insights_clusters <- renderUI({
-  #   fluidRow(
-  #     # Controls/options
-  #     column(
-  #       width = 2,
-  #       class = 'insights_options',
-  #       
-  #       radioButtons(
-  #         inputId = "insights_cluster_options",
-  #         label = "Feature:",
-  #         choices = c("Type", "Tags", "Year"),
-  #         selected = "Type"
-  #       ),
-  #       
-  #       fluidRow(
-  #         column(
-  #           width = 12,
-  #           align = 'center',
-  #           actionButton(
-  #             inputId = "insights_cluster_go",
-  #             label = "Go",
-  #             class = "btn-primary"
-  #           )
-  #         )
-  #       )
-  #     ),
-  #     
-  #     # Plot output area
-  #     column(
-  #       width = 10,
-  #       
-  #       HTML("TBD")
-  #     )
-  #   )
-  # })
-  
-  ## Contact Us: Email send button ----
-  observeEvent(input$email_send, {
-    if(input$email_send > 0) {
-      from <- input$email_address
-      to <- "kcjoe@mitre.org"
-      subject <- paste0("SJP Data Catalog Contact Form -- ", input$email_topic)
-      msg <- input$email_message
-      sendmail(from, to, subject, msg, control=list(smtpServer= "smtp-mail.outlook.com"))
+  # Type distribution
+  output$insights_summary_type_plot <- renderPlotly({
+    data <- data.frame(type_counts(), stringsAsFactors = FALSE)
+    
+    # Organize the values by counts from greatest to least
+    if (nrow(data) > 1) {
+      data$all_types <- factor(data$all_types, levels = unique(data$all_types)[order(data$Freq, decreasing = TRUE)])
+      x_vals <- data$all_types
+      y_vals <- data$Freq
+    } else {
+      # No need to sort if there's only one type of count
+      x_vals <- names(type_counts())
+      y_vals <- as.numeric(type_counts())
     }
+    
+    fig <- plot_ly(
+      x = x_vals,
+      y = y_vals,
+      type = "bar",
+    )
+    fig <- fig %>% layout(title = "Resource Types", yaxis = list(title = "Count"))
+
+    return(fig)
+  })
+  
+  # Year distribution
+  output$insights_summary_year_plot <- renderPlotly({
+    fig <- plot_ly(
+      x = names(year_counts()),
+      y = year_counts(),
+      type = "bar"
+    )
+    fig <- fig %>% layout(title = "Years Available", yaxis = list(title = "Count"))
+    
+    return(fig)
+  })
+  
+  # Tags distribution -- might get rid of this if wordcloud works out
+  output$insights_summary_tags_plot <- renderPlotly({
+    data <- data.frame(tags_counts(), stringsAsFactors = FALSE)
+    # No need to sort if there's only one type of tag
+    if (nrow(data) > 1) {
+      # Organize the values by counts from greatest to least
+      data$Var1 <- factor(data$Var1, levels = unique(data$Var1)[order(data$Freq, decreasing = TRUE)])
+    }
+    
+    fig <- plot_ly(
+      x = data$Var1,
+      y = data$Freq,
+      type = "bar",
+    )
+    fig <- fig %>% layout(
+      title = "Tags Distribution",
+      xaxis = list(tickangle = 45, tickmode = "linear", tickfont = list(size = 10)),
+      yaxis = list(title = "Count"))
+    
+    return(fig)
+  })
+  
+  # Will eventually be the chord diagrams
+  output$insights_connections_plot <- renderPlotly({
+    plot_ly()
+    
   })
 
 }

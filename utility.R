@@ -116,12 +116,13 @@ euclidean <- function(x, y) {
 
 # Computes all the different similarity-related values in one loop (e.g. similarity measure, number of shared tags, list of shared tags, list of shared methodologies)
 # Inputs:
+#   - full_catalog: dataframe containing all resources in the catalog and their attributes
 #   - catalog_features: binary dataframe indicating what features each resource has
 #   - sim_measure: name of similarity measure to use (e.g. "cosine", "euclidean")
 #   - total_tags: total number of tags in catalog
 #   - total_methods: total number of methods in catalog
 #   - count_types: boolean to determine whether to include the data type tags (e.g. dataset, repository, ...) should be counted, default is TRUE
-# Ouptut:
+# Output:
 #   - out: list containing all of the various similarity measure matrices
 get_all_sims <- function(full_catalog, catalog_features, sim_measure, total_tags, total_methods, count_types=TRUE) {
   all_types <- unique(unlist(lapply(strsplit(full_catalog$Tags, '; '), function(x) {x[1]})))
@@ -142,7 +143,7 @@ get_all_sims <- function(full_catalog, catalog_features, sim_measure, total_tags
     # Get features vector for resource i
     i_feat <- as.numeric(as.vector(catalog_features[i, ]))
     for (j in (i+1):nrow(catalog_features)) {
-      # Get features vector for resrouce j
+      # Get features vector for resource j
       j_feat <- as.numeric(as.vector(catalog_features[j, ]))
       
       # Compute similarity metric
@@ -177,6 +178,105 @@ get_all_sims <- function(full_catalog, catalog_features, sim_measure, total_tags
   out$methods <- methods_shared
   
   return(out)
+}
+
+
+# Computes all the different similarity-related values in one loop (e.g. similarity measure, number of shared tags, list of shared tags, list of shared methodologies)
+# Inputs:
+#   - full_catalog: dataframe containing all resources in the catalog and their attributes
+#   - catalog_features: binary dataframe indicating what features each resource has
+#   - total_tags: total number of tags in catalog
+#   - count_types: boolean to determine whether to include the data type tags (e.g. dataset, repository, ...) should be counted, default is TRUE
+# Output:
+#   - out: list containing all of the various similarity measure matrices
+get_shared_tags <- function(full_catalog, catalog_features, total_tags, count_types=TRUE, thresh=0) {
+  all_types <- unique(unlist(lapply(strsplit(full_catalog$Tags, '; '), function(x) {x[1]})))
+  
+  # Lists of shared tags
+  n_tags_shared <- data.frame(matrix(nrow = nrow(catalog_features), ncol = nrow(catalog_features)))
+  
+  # Set row and col names of each matrix to be resource names
+  colnames(n_tags_shared) <- rownames(n_tags_shared) <- rownames(catalog_features)
+  
+  for (i in 1:(nrow(catalog_features)-1)) {
+    # Get features vector for resource i
+    i_feat <- as.numeric(as.vector(catalog_features[i, ]))
+    for (j in (i+1):nrow(catalog_features)) {
+      # Get features vector for resource j
+      j_feat <- as.numeric(as.vector(catalog_features[j, ]))
+      
+      # Get list of shared tags and assign values to n_tags_shared and tags_shared matrices
+      # Tags take up the first n_tags features in the vectors
+      tags_overlap <- intersect(colnames(catalog_features)[1:total_tags][as.logical(i_feat[1:total_tags])], colnames(catalog_features)[1:total_tags][as.logical(j_feat[1:total_tags])]) 
+      if (!count_types) {
+        tags_overlap <- tags_overlap[!(tags_overlap %in% all_types)]
+      }
+      
+      if (length(tags_overlap) > thresh) {
+        n_tags_shared[i, j] <- n_tags_shared[j, i] <- length(tags_overlap)
+      } 
+    }
+  }
+  
+  return(n_tags_shared)
+}
+
+# Get the count of each resource type found in resource_set 
+# Inputs:
+#   - resource_set: dataframe of a set resources
+# Ouptut:
+#   - type_counts: table where names are the resource types and the values are their frequencies in resource_set
+get_type_dist <- function(resource_set) {
+  all_types <- unlist(lapply(strsplit(resource_set$Tags, '; '), function(x) {x[1]}))
+  type_counts <- sort(table(all_types), decreasing = TRUE)
+  
+  return(type_counts)
+}
+
+# Get the count of each year found in resource_set 
+# Inputs:
+#   - resource_set: dataframe of a set resources
+# Ouptut:
+#   - year_counts: table where names are the available years and the values are their frequencies in resource_set
+get_year_dist <- function(resource_set) {
+  all_years <- c()
+  for (i in 1:nrow(resource_set)) {
+    i_yr_val <- resource_set[i, "Years_Available"]
+    # Ignore if year data is missing or has string inputs (e.g. "N/A", "Varies")
+    if (!(is.na(i_yr_val)) & i_yr_val != "N/A" & !(grepl("Varies", i_yr_val))) {
+      # Remove any characters between parentheses and remove any trailing whitespace
+      i_yr_str <- trimws(gsub("\\(.*\\)", "", strsplit(i_yr_val, ",")[[1]]))
+      # Figure out of selected years overlaps with years available of selected resources
+      i_yrs <- unlist(lapply(i_yr_str, function(y) {
+        rng <- strtoi(strsplit(y, "-")[[1]])
+        if (length(rng) == 2) {
+          seq.int(rng[1], rng[2])
+        } else {#length(rng) == 1
+          rng[1]
+        }
+      }))
+      all_years <- c(all_years, i_yrs)
+    } 
+  }
+  year_counts <- table(all_years)
+  
+  return(year_counts)
+}
+
+# Get the count of each tag found in resource_set 
+# Inputs:
+#   - resource_set: dataframe of a set resources
+# Ouptut:
+#   - type_counts: table where names are the tag names and the values are their frequencies in resource_set
+get_tags_dist <- function(resource_set) {
+  all_types <- unlist(lapply(strsplit(resource_set$Tags, '; '), function(x) {x[1]}))
+  type_counts <- sort(table(all_types), decreasing = TRUE)
+  
+  tag_counts_tmp <- table(unlist(strsplit(resource_set$Tags, '; ')))
+  types <- names(type_counts)
+  tag_counts <- tag_counts_tmp[!(names(tag_counts_tmp) %in% types)]
+  
+  return(tag_counts)
 }
 
 
