@@ -445,137 +445,7 @@ ui <- MITREnavbarPage(
       column(
         width = 8,
         
-        h1("The Social Justice Platform Data Catalog"),
-        
-        h2("Overview"),
-        
-        HTML('<ol type="I">
-                <li>Introduction</li>
-                  <ol type="i">
-                      <li>What is the Social Justice Platform Data Catalog?</li>
-                      <li>Benefits of this catalog</li>
-                  </ol>
-                <li>Catalog Contents</li>
-                <li>How to Use the Catalog</li>
-                  <ol type="i">
-                      <li>Search the catalog</li>
-                      <li>Viewing the catalog</li>
-                      <li>Resource recommendations</li>
-                      <li>Saving resources</li>
-                  </ol>
-                <li>Contact Us</li>
-             </ol>'),
-        
-        hr(),
-        
-        h2("Introduction"),
-        
-        h3("What is the Social Justice Platform Data Catalog?"),
-        
-        p("The Social Justice Platform (SJP) Data Catalog is an open source collection of data sets, resources, and tools with a 
-        specific emphasis on social justice. The goal of this catalog is to provide a focused repository of social justice and 
-        equity resources where researchers and analysts can go to explore relevant data for their projects. Users can interactively 
-        search through the catalog using the SJP Data Catalog Dashboard. The dashboard includes features such as keyword-driven 
-        searching, filtering by various characteristics and topics (e.g. tags, year, geographic level), as well as the ability to 
-        save and export metadata for desired sources. Note that this catalog is intended to serve as a tool for exploring publicly 
-        available data resources in the social justice realm, not as a database for housing these resources. The catalog provides 
-        multiple levels of metadata on each resource and includes links to access the data from its native source."),
-        
-        h3("Benefits of this catalog"), 
-        
-        p("Though there exists other databases and repositories for social justice data, many of them are narrowly scoped or 
-        are tailored towards a specific tool or resource. We seek to add to these existing repositories by serving as a comprehensive 
-        collection of data sources spanning a variety of social justice domains. This catalog distinguishes itself from others by 
-        using metadata to draw connections between sources. Using these connections, the dashboard can provide users with a set of 
-        resource recommendations—allowing users to further explore the resources in their domain of interest."),
-        
-        hr(),
-        
-        h2("Catalog Contents"),
-        
-        HTML("<p>The SJP Data Catalog contains a total of 98 resources--53 datatsets, 13 data repositories, 19 interactive tools, 
-        6 summary tables, and 7 data methodologies. The resources represented in the catalog are diverse across multiple 
-        characteristics with data availability spanning from 1946 to present day and geographic levels as broad as national level 
-        and as narrow as zip codes. A total of 66 distinct tags are used to describe the available resources and cover features 
-        ranging from topic/subject to data collection method to stratifications. For a more detailed summary of the catalog and 
-        its contents, please visit the <i>Insights</i> tab.</p>"),
-        
-        hr(),
-        
-        h2("How to Use the Catalog"),
-        
-        h3("Search the catalog"),
-        
-        p("Users can explore the full catalog of data in the “Search Catalog” tab of the dashboard. This page includes several 
-        convenient ways to search and filter for resources within the catalog."),
-        
-        p("Users can search by entering keywords into the search bar. This is a free-text field where users can enter any keywords 
-        or phrases. After entering text, the dashboard will return any resources that have any descriptions or characteristics 
-        which match the phrases entered into the search bar."),
-        
-        p("Another way to search the catalog is through various filters. Users can filter through resources by tags, years, 
-        and geographic levels available. The different types of filter categories can be used in conjunction with each other, 
-        granting the ability to perform highly customizable searches."),
-        
-        HTML("<center>"),
-        img(src='about/search.png', align = "center", width="75%"),
-        HTML("</center>"),
-        
-        h3("Viewing the catalog"),
-        
-        HTML("<p>There are multiple options for viewing the selected resources in order to help users organize their search results. 
-        Resources being shown in the main panel of the dashboard can be sorted according to:</p>
-        <ul>
-          <li>Alphabetical by Name</li>
-          <li>Year: Oldest to Newest</li>
-          <li>Year: Newest to Oldest</li>
-        </ul>
-        <p>Users can also control the number of resources to show per page and can navigate through the pages to see more resources.</p>"),
-        
-        HTML("<center>"),
-        img(src='about/view_options.png', align = "center", width="75%"),
-        HTML("</center>"),
-        
-        h3("Resource recommendations"),
-        
-        p("Another key feature of the catalog is its ability to recommend similar resources to the user based on the results from 
-        their search criteria. Each of the individual resource entries have a toggle at the bottom of its card which, when switched 
-        on, will reveal (if any) recommended sources which share similar features to the original resource. A brief description of 
-        each recommendation is provided as well as lists of shared features between the two resources. Furthermore, below these 
-        descriptions are two buttons which allow users to view full details of the recommended resource or save the recommendation 
-        directly to their “Saved Resources” page."),
-        
-        HTML("<center>"),
-        img(src='about/recs.png', align = "center", width="75%"),
-        HTML("</center>"),
-        
-        h3("Saving resources"),
-        
-        p("As users navigate through the dashboard and explore relevant data sources, they can “save” resources to a shopping 
-        cart-like page at multiple points throughout their perusal. This feature allows users to keep track of any relevant, useful, 
-        and interesting data sources. “Save” buttons are denoted with a heart-shaped icon. Clicking any of the “Save” buttons will 
-        add the resource to the “Saved Resources” tab at the top of the page. Within the “Saved Resources” tab, users can view a list 
-        of all their saved resources. By default, each resource will be shown as a single row with some basic summary information shown 
-        as well as a set of action buttons. The “Expand” button will open a card similar to the ones shown on the main page of the 
-        “Search Catalog” tab containing more detailed information about the resource. The trash button will remove the individual 
-        resource from the “Saved Resources” page."),
-        
-        p("Once users are satisfied with their collection of saved resources, they can use the “Export to…” feature to export their 
-        curated data repository as either a CSV file or a PDF report. Alternatively, if the user would like to clear their cart and 
-        start over, this can be accomplished by clicking the “Remove All” button in the top right-hand corner of the page."),
-        
-        HTML("<center>"),
-        img(src='about/save_res.png', align = "center", width="75%"),
-        HTML("</center>"),
-        
-        hr(),
-        
-        h2("Contact Info"),
-        
-        HTML('<p>For more information about the SJP Data Catalog, please contact Hannah De los Santos at 
-        <a href="mailto:hdelossantos@mitre.org">hdelossantos@mitre.org</a> or the Social Justice Platform at 
-        <a href="mailto:socialjustice@mitre.org">socialjustice@mitre.org</a>, or visit the <i>Contact Us</i> tab.</p>')
-        
+        includeHTML("www/about.html")
       ),
       
       # Right-side padding
@@ -595,16 +465,7 @@ ui <- MITREnavbarPage(
       column(
         width = 8,
         
-        h1("Contact Us"),
-        
-        br(),
-
-        HTML('<p>If you have any questions, suggestions, or would like to make contributions to the SJP Data Catalog, feel free to 
-             contact Hannah De los Santos at <a href="mailto:hdelossantos@mitre.org">hdelossantos@mitre.org</a> or the Social Justice Platform 
-             at <a href="mailto:socialjustice@mitre.org">socialjustice@mitre.org</a>.</p>
-             
-             <p>Please make sure to include "SJP Data Catalog" in the subject line of your email to indicate that your inquiry is related to 
-             this data catalog.</p>'),
+        includeHTML("www/contact_us.html")
        
       ),
       
