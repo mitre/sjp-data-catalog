@@ -507,9 +507,6 @@ server <- function(input, output, session) {
   card_open <- reactiveVal("")
   
   # For Insights tab--all choices for displaying certain figures/graphs
-  insights_summary_choice <- reactiveVal("Type")
-  insights_connections_choice <- reactiveVal("Type")
-  # insights_cluster_choice <- reactiveVal("Type")
   insights_full_set <- reactiveVal(full_catalog)
   insights_filtered_set <- reactiveVal(full_catalog)
   type_counts <- reactiveVal(get_type_dist(full_catalog))
