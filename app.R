@@ -37,7 +37,7 @@ source("utility.R")
 ## Catalog data ----
 
 # Use local data or pull from SharePoint?
-local <- TRUE
+local <- FALSE
 
 # Data folder
 if (local) {
@@ -374,11 +374,11 @@ ui <- MITREnavbarPage(
                 actionLink(
                   inputId = "export_to_csv",
                   label = "To CSV"
-                ),
-                actionLink(
-                  inputId = "export_to_pdf",
-                  label = "To PDF"
                 )
+                # actionLink(
+                #   inputId = "export_to_pdf",
+                #   label = "To PDF"
+                # )
               )
             )
           )
@@ -2333,15 +2333,21 @@ server <- function(input, output, session) {
   # Tags distribution -- might get rid of this if wordcloud works out
   output$insights_summary_tags_plot <- renderPlotly({
     data <- data.frame(tags_counts(), stringsAsFactors = FALSE)
-    # No need to sort if there's only one type of tag
+    
+    # Organize the values by counts from greatest to least
     if (nrow(data) > 1) {
-      # Organize the values by counts from greatest to least
       data$Var1 <- factor(data$Var1, levels = unique(data$Var1)[order(data$Freq, decreasing = TRUE)])
+      x_vals <- data$Var1
+      y_vals <- data$Freq
+    } else {
+      # No need to sort if there's only one type of count
+      x_vals <- names(tags_counts())
+      y_vals <- as.numeric(tags_counts())
     }
     
     fig <- plot_ly(
-      x = data$Var1,
-      y = data$Freq,
+      x = x_vals,
+      y = y_vals,
       type = "bar",
     )
     fig <- fig %>% layout(
