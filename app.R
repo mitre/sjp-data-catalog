@@ -509,10 +509,6 @@ server <- function(input, output, session) {
   # For Insights tab--data and distributions for display 
   insights_full_set <- reactiveVal(full_catalog)
   insights_filtered_set <- reactiveVal(full_catalog)
-  # type_counts <- reactiveVal(get_type_dist(full_catalog))
-  # year_counts <- reactiveVal(get_year_dist(full_catalog))
-  # tags_counts <- reactiveVal(get_tags_dist(full_catalog))
-  
   insights_dists <- reactiveValues("type_counts" = get_type_dist(full_catalog),
                                    "year_counts" = get_year_dist(full_catalog),
                                    "tags_counts" = get_tags_dist(full_catalog))
@@ -998,6 +994,7 @@ server <- function(input, output, session) {
             )
           )
         } else {
+          # Generate collapse for a non-methodology resource
           bsCollapsePanel(
             title = res_name,
             value = paste0("rsc_", i),
