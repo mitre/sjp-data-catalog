@@ -136,3 +136,26 @@
   height: 50px;
 }
 
+.insights_options {
+  padding: 10px;
+  background-color: #f1f3f4;
+  border-radius: 5px;
+  border-style: solid;
+  border-width: 1px;
+  border-color: #e5e6e6;
+}
+
+.btn-group {
+  color: #0B2338 !important;
+  background-color: #D4D4D3 !important;
+}
+
+.btn-group:hover {
+  filter: brightness(90%);
+}
+
+.btn-group:active {
+  color: #F1F3F4 !important;
+  background-color: #005B94 !important;
+}
+
