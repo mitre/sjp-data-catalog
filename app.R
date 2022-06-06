@@ -509,9 +509,12 @@ server <- function(input, output, session) {
   # For Insights tab--data and distributions for display 
   insights_full_set <- reactiveVal(full_catalog)
   insights_filtered_set <- reactiveVal(full_catalog)
-  insights_dists <- reactiveValues("type_counts" = get_type_dist(full_catalog),
-                                   "year_counts" = get_year_dist(full_catalog),
-                                   "tags_counts" = get_tags_dist(full_catalog))
+  # insights_dists <- reactiveValues("type_counts" = get_type_dist(full_catalog),
+  #                                  "year_counts" = get_year_dist(full_catalog),
+  #                                  "tags_counts" = get_tags_dist(full_catalog))
+  type_counts <- reactiveVal(get_type_dist(full_catalog))
+  year_counts <- reactiveVal(get_year_dist(full_catalog))
+  tags_counts <- reactiveVal(get_tags_dist(full_catalog))
   
   
   ## Search Catalog: Filter by tags ----
@@ -1778,9 +1781,12 @@ server <- function(input, output, session) {
     }
 
     # Recompute data for graphs
-    insights_dists$type_counts <- get_type_dist(insights_full_set())
-    insights_dists$year_counts <- get_year_dist(insights_full_set())
-    insights_dists$tags_counts <- get_tags_dist(insights_full_set())
+    # insights_dists$type_counts <- get_type_dist(insights_full_set())
+    # insights_dists$year_counts <- get_year_dist(insights_full_set())
+    # insights_dists$tags_counts <- get_tags_dist(insights_full_set())
+    type_counts(get_type_dist(insights_full_set()))
+    year_counts(get_year_dist(insights_full_set()))
+    tags_counts(get_tags_dist(insights_full_set()))
   })
   
   observeEvent(shopping_list(), {
@@ -1798,9 +1804,12 @@ server <- function(input, output, session) {
         insights_full_set(shopping_list_df)
         
         # Recompute data for graphs
-        insights_dists$type_counts <- get_type_dist(insights_full_set())
-        insights_dists$year_counts <- get_year_dist(insights_full_set())
-        insights_dists$tags_counts <- get_tags_dist(insights_full_set())
+        # insights_dists$type_counts <- get_type_dist(insights_full_set())
+        # insights_dists$year_counts <- get_year_dist(insights_full_set())
+        # insights_dists$tags_counts <- get_tags_dist(insights_full_set())
+        type_counts(get_type_dist(insights_full_set()))
+        year_counts(get_year_dist(insights_full_set()))
+        tags_counts(get_tags_dist(insights_full_set()))
       }
     } else {
       updateRadioGroupButtons(
@@ -2014,9 +2023,12 @@ server <- function(input, output, session) {
     }
     
     # Analytics for Insights tab based on view
-    insights_dists$type_counts <- get_type_dist(insights_full_set())
-    insights_dists$year_counts <- get_year_dist(insights_full_set())
-    insights_dists$tags_counts <- get_tags_dist(insights_full_set())
+    # insights_dists$type_counts <- get_type_dist(insights_filtered_set)
+    # insights_dists$year_counts <- get_year_dist(insights_filtered_set)
+    # insights_dists$tags_counts <- get_tags_dist(insights_filtered_set)
+    type_counts(get_type_dist(insights_filtered_set))
+    year_counts(get_year_dist(insights_filtered_set))
+    tags_counts(get_tags_dist(insights_filtered_set))
   })
   
   ### Clear filters on Insights page ----
@@ -2049,9 +2061,12 @@ server <- function(input, output, session) {
     }
     
     # Recompute data for graphs
-    insights_dists$type_counts <- get_type_dist(insights_full_set())
-    insights_dists$year_counts <- get_year_dist(insights_full_set())
-    insights_dists$tags_counts <- get_tags_dist(insights_full_set())
+    # insights_dists$type_counts <- get_type_dist(insights_full_set())
+    # insights_dists$year_counts <- get_year_dist(insights_full_set())
+    # insights_dists$tags_counts <- get_tags_dist(insights_full_set())
+    type_counts(get_type_dist(insights_full_set()))
+    year_counts(get_year_dist(insights_full_set()))
+    tags_counts(get_tags_dist(insights_full_set()))
   })
   
   ### Main Insights section with interactive plots ----
@@ -2154,7 +2169,8 @@ server <- function(input, output, session) {
   
   # Type distribution
   output$insights_summary_type_plot <- renderPlotly({
-    data <- data.frame(insights_dists$type_counts, stringsAsFactors = FALSE)
+    # data <- data.frame(isolate(insights_dists$type_counts), stringsAsFactors = FALSE)
+    data <- data.frame(type_counts(), stringsAsFactors = FALSE)
     
     # Organize the values by counts from greatest to least
     if (nrow(data) > 1) {
@@ -2163,8 +2179,10 @@ server <- function(input, output, session) {
       y_vals <- data$Freq
     } else {
       # No need to sort if there's only one type of count
-      x_vals <- names(insights_dists$type_counts)
-      y_vals <- as.numeric(insights_dists$type_counts)
+      # x_vals <- names(isolate(insights_dists$type_counts))
+      # y_vals <- as.numeric(isolate(insights_dists$type_counts))
+      x_vals <- names(type_counts())
+      y_vals <- as.numeric(type_counts())
     }
     
     fig <- plot_ly(
@@ -2180,8 +2198,8 @@ server <- function(input, output, session) {
   # Year distribution
   output$insights_summary_year_plot <- renderPlotly({
     fig <- plot_ly(
-      x = names(insights_dists$year_counts),
-      y = insights_dists$year_counts,
+      x = names(year_counts()),
+      y = as.numeric(year_counts()),
       type = "bar"
     )
     fig <- fig %>% layout(title = "Years Available", yaxis = list(title = "Count"))
@@ -2191,7 +2209,8 @@ server <- function(input, output, session) {
   
   # Tags distribution -- might get rid of this if wordcloud works out
   output$insights_summary_tags_plot <- renderPlotly({
-    data <- data.frame(insights_dists$tags_counts, stringsAsFactors = FALSE)
+    # data <- data.frame(isolate(insights_dists$tags_counts), stringsAsFactors = FALSE)
+    data <- data.frame(tags_counts(), stringsAsFactors = FALSE)
     
     # Organize the values by counts from greatest to least
     if (nrow(data) > 1) {
@@ -2200,8 +2219,10 @@ server <- function(input, output, session) {
       y_vals <- data$Freq
     } else {
       # No need to sort if there's only one type of count
-      x_vals <- names(insights_dists$tags_counts)
-      y_vals <- as.numeric(insights_dists$tags_counts)
+      # x_vals <- names(isolate(insights_dists$tags_counts))
+      # y_vals <- as.numeric(isolate(insights_dists$tags_counts))
+      x_vals <- names(tags_counts())
+      y_vals <- as.numeric(tags_counts())
     }
     
     fig <- plot_ly(
