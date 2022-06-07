@@ -818,11 +818,17 @@ server <- function(input, output, session) {
       }
     }
     
-    # Reset the years slider
+    # Reset the years slider and checkbox
     updateSliderInput(
       session,
       inputId = "filter_year",
       value = c(min_year, max_year)
+    )
+    
+    updateCheckboxInput(
+      session,
+      inputId = "filter_year_na",
+      value = TRUE
     )
     
     # Reset the geographic levels 
