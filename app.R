@@ -23,9 +23,6 @@ library(bsplus)
 library(rintrojs)
 library(lsa)
 library(plotly)
-library(reticulate)
-library(sendmailR)
-library(d3wordcloud)
 
 
 
