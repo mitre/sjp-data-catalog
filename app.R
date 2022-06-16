@@ -23,6 +23,7 @@ library(bsplus)
 library(rintrojs)
 library(lsa)
 library(plotly)
+library(d3wordcloud)
 
 
 
@@ -70,6 +71,7 @@ tools <- catalog$tools
 full_catalog <- rbind.fill(datasets, repos, methods, tables, tools)
 full_catalog <- sort_by_criteria(full_catalog, "Alphabetical") #start off ordered alphabetically because that's what the default selection is
 colnames(full_catalog) <- unlist(lapply(colnames(full_catalog), function(x) {gsub(" ", "_", x)})) #changing column names so that there are no spaces
+full_catalog <- full_catalog %>% relocate("Computed_Measure(s)", .after = "Source") #moving methodology column up so it appears higher in info cards
 
 # Get the data sources contained in the methodologies
 methods_data <- catalog$`methodology--data`
