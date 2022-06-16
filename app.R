@@ -125,9 +125,10 @@ for (i in 1:nrow(full_catalog)) {
 # Get max number of recs across all resources for generating buttons in the server
 max_num_recs <- max(num_recs) 
 
-## Analytics for Insights tab ----
-
-# set.seed(1234) # for wordcloud reproducibility 
+# Get feature distributions for whole catalog
+type_counts_full <- get_type_dist(full_catalog)
+year_counts_full <- get_year_dist(full_catalog)
+tags_counts_full <- get_tags_dist(full_catalog)
 
 
 
@@ -444,7 +445,20 @@ ui <- MITREnavbarPage(
       column(
         width = 8,
         
-        includeHTML("www/about.html")
+        includeHTML("www/about_overview_intro.html"),
+        
+        h2("Catalog Contents"),
+          
+        HTML(paste0("<p>The SJP Data Catalog contains a total of ", nrow(full_catalog)," resources--", type_counts_full["Dataset"], 
+        " datatsets, ", type_counts_full["Data Repository"], " data repositories, ", type_counts_full["Tool"], " interactive tools, ", 
+        type_counts_full["Summary Table"], " summary tables, and ", type_counts_full["Data Methodology"], " data methodologies. The 
+        resources represented in the catalog are diverse across multiple characteristics with data availability spanning from ", 
+        min_year," to ", max_year," and geographic levels as broad as national level and as narrow as zip codes. A total of ", 
+        length(tags_counts_full)," distinct tags are used to describe the available 
+        resources and cover features ranging from topic/subject to data collection method to stratifications. For a more 
+        detailed summary of the catalog and its contents, please visit the <i>Insights</i> tab.</p>")),
+        
+        includeHTML("www/about_howto.html")
       ),
       
       # Right-side padding
@@ -1842,12 +1856,12 @@ server <- function(input, output, session) {
           actionLink(
             inputId = paste0("insights_label_", gsub(" ", "_", t)), 
             label = t, 
-            icon("caret-right")
+            icon("caret-down")
           ),
           
           # Show/hide the info within each tag type
           conditionalPanel(
-            condition = paste0("input.insights_label_", gsub(" ", "_", t)," % 2 == 1"),
+            condition = paste0("input.insights_label_", gsub(" ", "_", t)," % 2 == 0"),
             
             if (all(is.na(subcats))) {
               # If there are no subcategories, just show the checkbox group
@@ -1932,13 +1946,13 @@ server <- function(input, output, session) {
           updateActionLink(
             session = session,
             inputId = paste("insights", "label", gsub(" ", "_", t), sep = "_"),
-            icon = icon("caret-down")
+            icon = icon("caret-right")
           )
         } else {
           updateActionLink(
             session = session,
             inputId = paste("insights", "label", gsub(" ", "_", t), sep = "_"),
-            icon = icon("caret-right")
+            icon = icon("caret-down")
           )
         }
       })
@@ -2115,33 +2129,39 @@ server <- function(input, output, session) {
           id = "insight_plot_tabs",
           
           tabPanel(
-            title = "Catalog Summary",
-            value = "insights_summary_tab",
-            
-            # d3wordcloudOutput(
-            #   outputId = "insights_summary_wordcloud"
-            # ),
+            title = "Features",
+            value = "insights_features_tab",
             
             br(),
             
             plotlyOutput(
-              outputId = "insights_summary_type_plot",
+              outputId = "insights_features_type_plot",
               height = '400px'
             ),
             
             plotlyOutput(
-              outputId = "insights_summary_year_plot",
+              outputId = "insights_features_year_plot",
               height = '400px'
-            ),
+            )
             
-            plotlyOutput(
-              outputId = "insights_summary_tags_plot",
-              height = '400px'
-            ),
+            # plotlyOutput(
+            #   outputId = "insights_features_tags_plot",
+            #   height = '400px'
+            # ),
           ),
           
           tabPanel(
-            title = "Catalog Connections", 
+            title = "Tags",
+            value = "insights_tags_plot",
+            
+            d3wordcloudOutput(
+              outputId = "insights_tags_wordcloud",
+              height = "700px"
+            )
+          ),
+          
+          tabPanel(
+            title = "Domain Connections", 
             value = "insights_connections_tab",
             
             br(),
@@ -2159,21 +2179,20 @@ server <- function(input, output, session) {
   })
   
   # Tags wordcloud
-  output$insights_summary_wordcloud <- renderD3wordcloud({
+  output$insights_tags_wordcloud <- renderD3wordcloud({
     d3wordcloud(
       words = names(tags_counts()), 
       freq = tags_counts(), 
-      rotate.min = -45,           
-      rotate.max = 45,
+      rotate.min = 0,           
+      rotate.max = 0,
       tooltip = TRUE,
       font = "Arial",
-      spiral = "rectangular"
     )
     
   })
   
   # Type distribution
-  output$insights_summary_type_plot <- renderPlotly({
+  output$insights_features_type_plot <- renderPlotly({
     # data <- data.frame(isolate(insights_dists$type_counts), stringsAsFactors = FALSE)
     data <- data.frame(type_counts(), stringsAsFactors = FALSE)
     
@@ -2201,7 +2220,7 @@ server <- function(input, output, session) {
   })
   
   # Year distribution
-  output$insights_summary_year_plot <- renderPlotly({
+  output$insights_features_year_plot <- renderPlotly({
     fig <- plot_ly(
       x = names(year_counts()),
       y = as.numeric(year_counts()),
@@ -2213,7 +2232,7 @@ server <- function(input, output, session) {
   })
   
   # Tags distribution -- might get rid of this if wordcloud works out
-  output$insights_summary_tags_plot <- renderPlotly({
+  output$insights_features_tags_plot <- renderPlotly({
     # data <- data.frame(isolate(insights_dists$tags_counts), stringsAsFactors = FALSE)
     data <- data.frame(tags_counts(), stringsAsFactors = FALSE)
     
