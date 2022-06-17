@@ -223,8 +223,8 @@ get_shared_tags <- function(full_catalog, catalog_features, total_tags, count_ty
 
 # Get the count of each resource type found in resource_set 
 # Inputs:
-#   - resource_set: dataframe of a set resources
-# Ouptut:
+#   - resource_set: dataframe of a set of resources
+# Output:
 #   - type_counts: table where names are the resource types and the values are their frequencies in resource_set
 get_type_dist <- function(resource_set) {
   all_types <- unlist(lapply(strsplit(resource_set$Tags, '; '), function(x) {x[1]}))
@@ -235,8 +235,8 @@ get_type_dist <- function(resource_set) {
 
 # Get the count of each year found in resource_set 
 # Inputs:
-#   - resource_set: dataframe of a set resources
-# Ouptut:
+#   - resource_set: dataframe of a set of resources
+# Output:
 #   - year_counts: table where names are the available years and the values are their frequencies in resource_set
 get_year_dist <- function(resource_set) {
   all_years <- c()
@@ -265,8 +265,8 @@ get_year_dist <- function(resource_set) {
 
 # Get the count of each tag found in resource_set 
 # Inputs:
-#   - resource_set: dataframe of a set resources
-# Ouptut:
+#   - resource_set: dataframe of a set of resources
+# Output:
 #   - type_counts: table where names are the tag names and the values are their frequencies in resource_set
 get_tags_dist <- function(resource_set) {
   all_types <- unlist(lapply(strsplit(resource_set$Tags, '; '), function(x) {x[1]}))
@@ -279,4 +279,151 @@ get_tags_dist <- function(resource_set) {
   return(tag_counts)
 }
 
+# Get a similarity matrix containing the number of shared resources among the set of tags
+# Inputs:
+#   - resource_set: dataframe of a set of resources
+# Output:
+#   - n_res_shared: dataframe where each cell (i, j) contains the number of resources that share tags i and j
+tag_connections <- function(resource_set) {
+  all_types <- unlist(lapply(strsplit(resource_set$Tags, '; '), function(x) {x[1]}))
+  type_counts <- sort(table(all_types), decreasing = TRUE)
+  
+  all_tags <- unique(unlist(strsplit(resource_set$Tags, '; ')))
+  types <- names(type_counts)
+  all_tags <- all_tags[!(all_tags %in% types)]
+  
+  names_to_tags <- strsplit(resource_set$Tags, '; ')
+  names(names_to_tags) <- resource_set$Name
+  
+  tags_to_names <- sapply(all_tags, function(x) c())
+  
+  for (res in names(names_to_tags)) {
+    res_tags <- names_to_tags[[res]]
+    for (t in res_tags) {
+      if (t %in% all_tags) {
+        tags_to_names[[t]] <- c(tags_to_names[[t]], res)
+      }
+    }
+  }
+  
+  n_res_shared <- data.frame(matrix(nrow = length(all_tags), ncol = length(all_tags)))
+  colnames(n_res_shared) <- rownames(n_res_shared) <- names(tags_to_names)
+  
+  for (i in 1:(length(tags_to_names)-1)) {
+    tag_i_res <- tags_to_names[[i]]
+    
+    for (j in (i+1):length(tags_to_names)) {
+      tag_j_res <- tags_to_names[[j]]
+      
+      res_overlap <- intersect(tag_i_res, tag_j_res)
+      
+      n_res_shared[i, j] <- n_res_shared[j, i] <- length(res_overlap)
+    }
+  }
+  
+  return(n_res_shared)
+}
 
+
+# Get a similarity matrix containing the number of shared resources among the set of tags
+# Inputs:
+#   - resource_set: dataframe of a set of resources
+#   - tags_set: list where keys are the tag types and values are the set of selected tags within that type
+# Output:
+#   - filtered_set: dataframe of resources filtered by tags_set
+filter_by_tags <- function(resource_set, tags_set) {
+  filtered_set <- resource_set
+  
+  # Get sources with the selected tags
+  if (!is.null(unlist(tags_set))) {
+    # Filter according to each type of tag
+    for (tag_type in names(tags_set)) {
+      if (!is.null(tags_set[[tag_type]])) {
+        # Get user-selected tags for this tag type
+        get_select <- tags_set[[tag_type]]
+        
+        # Remove any entries that don't align with the selected tags
+        keep_indices <- c()
+        for (i in 1:nrow(filtered_set)) {
+          # Get tags for i-th entry
+          i_tags <- strsplit(filtered_set[i, "Tags"], ";")[[1]]
+          i_tags <- trimws(i_tags)
+          # If i-th resource is not of the selected tag types, remove it from catalog
+          if (length(intersect(get_select, i_tags)) > 0) {
+            keep_indices <- c(keep_indices, i)
+          } 
+        }
+        filtered_set <- filtered_set[keep_indices,]
+      }
+    }
+  }
+  
+  return(filtered_set)
+}
+
+
+# return data matrix to pass to sankey diagram
+get_sankey_data <- function(resource_set, list_of_tags) {
+  res_types <- list_of_tags$Tags[list_of_tags$'Tag Type' == "Resource Type"]
+  
+  domains <- unique(list_of_tags$Domain[list_of_tags$'Tag Type' == "Data Subject"])
+  subjects_by_domain <- sapply(domains, function(d) {
+    list_of_tags$Tags[(list_of_tags$'Tag Type' == "Data Subject") & (list_of_tags$Domain == d)]
+  }, simplify = FALSE)
+  subjects <- as.vector(unlist(subjects_by_domain))
+  
+  attr_domains <- unique(list_of_tags$Domain[list_of_tags$'Tag Type' == "Data Attribute"])
+  attributes_by_domain <- sapply(attr_domains, function(d) {
+    list_of_tags$Tags[(list_of_tags$'Tag Type' == "Data Attribute") & (list_of_tags$Domain == d)]
+  }, simplify = FALSE)
+  attributes <- as.vector(unlist(attributes_by_domain))
+  
+  name <- c(res_types, domains, subjects, attributes)
+  subj_dom_counts <- lapply(subjects_by_domain, function(s) length(s))
+  attr_dom_counts <- lapply(attributes_by_domain, function(a) length(a))
+  group <- c(
+    res_types,
+    domains,
+    unlist(lapply(names(subj_dom_counts), function(x) {rep(x, subj_dom_counts[[x]])})), 
+    unlist(lapply(names(attr_dom_counts), function(x) {rep(x, attr_dom_counts[[x]])}))
+  )
+  nodes <- data.frame(name, group)
+  
+  links <- data.frame(matrix(ncol = 3, nrow = 0))
+  colnames(links) <- c("source", "target", "value")
+  
+  # Level 1: Resource Types --> Domains
+  for (r in res_types) {
+    for (d in domains) {
+      counts <- 10
+      links[nrow(links) + 1,] <- c(r, d, counts)
+    }
+  }
+  
+  # Level 2: Domains --> Subjects
+  for (d in domains) {
+    d_subjects <- subjects_by_domain[[d]]
+    for (s in d_subjects) {
+      counts <- 10
+      links[nrow(links) + 1,] <- c(d, s, counts)
+    }
+  }
+  
+  # Level 3: Subjects --> Attributes
+  for (s in subjects) {
+    for (a in attributes) {
+      counts <- 10
+      links[nrow(links) + 1,] <- c(s, a, counts)
+    }
+  }
+  
+  # With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+  links$IDsource <- match(links$source, nodes$name)-1 
+  links$IDtarget <- match(links$target, nodes$name)-1
+  
+  out <- list()
+  out$nodes <- nodes
+  out$links <- links
+  
+  return(out)
+}

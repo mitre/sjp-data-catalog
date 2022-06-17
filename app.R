@@ -23,7 +23,7 @@ library(bsplus)
 library(rintrojs)
 library(lsa)
 library(plotly)
-library(d3wordcloud)
+library(networkD3)
 
 
 
@@ -125,7 +125,7 @@ for (i in 1:nrow(full_catalog)) {
 # Get max number of recs across all resources for generating buttons in the server
 max_num_recs <- max(num_recs) 
 
-# Get feature distributions for whole catalog
+# Get feature distributions for whole catalog -- need this for About tab
 type_counts_full <- get_type_dist(full_catalog)
 year_counts_full <- get_year_dist(full_catalog)
 tags_counts_full <- get_tags_dist(full_catalog)
@@ -528,6 +528,7 @@ server <- function(input, output, session) {
   type_counts <- reactiveVal(get_type_dist(full_catalog))
   year_counts <- reactiveVal(get_year_dist(full_catalog))
   tags_counts <- reactiveVal(get_tags_dist(full_catalog))
+  tags_connect_data <- reactiveVal(get_sankey_data(full_catalog, list_of_tags))
   
   
   ## Search Catalog: Filter by tags ----
@@ -676,7 +677,7 @@ server <- function(input, output, session) {
   
   ### Button for filtering according to selected checkboxes ----
   observeEvent(input$filter, {
-    tmp_catalog <- full_catalog
+    # tmp_catalog <- full_catalog
     
     # Update selected tags on button press
     selected_tags <-
@@ -705,28 +706,7 @@ server <- function(input, output, session) {
     selected_tags <- setNames(selected_tags, tag_types)
     
     # Get sources with the selected tags
-    if (!is.null(unlist(selected_tags))) {
-      # Filter according to each type of tag
-      for (tag_type in names(selected_tags)) {
-        if (!is.null(selected_tags[[tag_type]])) {
-          # Get user-selected tags for this tag type
-          get_select <- selected_tags[[tag_type]]
-          
-          # Remove any entries that don't align with the selected tags
-          keep_indices <- c()
-          for (i in 1:nrow(tmp_catalog)) {
-            # Get tags for i-th entry
-            i_tags <- strsplit(tmp_catalog[i, "Tags"], ";")[[1]]
-            i_tags <- trimws(i_tags)
-            # If i-th resource is not of the selected tag types, remove it from catalog
-            if (length(intersect(get_select, i_tags)) > 0) {
-              keep_indices <- c(keep_indices, i)
-            } 
-          }
-          tmp_catalog <- tmp_catalog[keep_indices,]
-        }
-      }
-    }
+    tmp_catalog <- filter_by_tags(full_catalog, selected_tags)
     
     # Further filter by year
     if (input$filter_year[1] != min_year || input$filter_year[2] != max_year || !input$filter_year_na) {
@@ -1774,27 +1754,25 @@ server <- function(input, output, session) {
     
     # Reset all of the tags checkboxes
     for (t in tag_types) {
-      if (t != "Resource Type") {
-        subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
-        
-        if (all(is.na(subcats))) {
+      subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
+      
+      if (all(is.na(subcats))) {
+        updateCheckboxGroupInput(
+          session, 
+          inputId = paste0("insights_", gsub(" ", "_", t)), 
+          selected = FALSE
+        )
+      } else {
+        for (s in subcats) {
+          if (is.na(s)) {
+            s <- "Other"
+          }
+          
           updateCheckboxGroupInput(
             session, 
-            inputId = paste0("insights_", gsub(" ", "_", t)), 
+            inputId = paste0("insights_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--")), 
             selected = FALSE
           )
-        } else {
-          for (s in subcats) {
-            if (is.na(s)) {
-              s <- "Other"
-            }
-            
-            updateCheckboxGroupInput(
-              session, 
-              inputId = paste0("insights_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--")), 
-              selected = FALSE
-            )
-          }
         }
       }
     }
@@ -1806,6 +1784,7 @@ server <- function(input, output, session) {
     type_counts(get_type_dist(insights_full_set()))
     year_counts(get_year_dist(insights_full_set()))
     tags_counts(get_tags_dist(insights_full_set()))
+    tags_connect_data(get_sankey_data(insights_full_set(), list_of_tags))
   })
   
   observeEvent(shopping_list(), {
@@ -1829,6 +1808,7 @@ server <- function(input, output, session) {
         type_counts(get_type_dist(insights_full_set()))
         year_counts(get_year_dist(insights_full_set()))
         tags_counts(get_tags_dist(insights_full_set()))
+        tags_connect_data(get_sankey_data(insights_full_set(), list_of_tags))
       }
     } else {
       updateRadioGroupButtons(
@@ -1845,152 +1825,148 @@ server <- function(input, output, session) {
   ### Generate collapsible menus for the filter by tag checkboxes ----
   output$insights_filter <- renderUI({
     lapply(tag_types, function(t) {
-      if (t != "Resource Type") {
-        tags <- list_of_tags[list_of_tags$'Tag Type' == t, ]
-        subcats <- sort(unique(tags$Subcategory), na.last = TRUE)
+      tags <- list_of_tags[list_of_tags$'Tag Type' == t, ]
+      subcats <- sort(unique(tags$Subcategory), na.last = TRUE)
+      
+      # Display checkbox groups for each subcategory within each tag type
+      div(
+        # Overarching tag types
+        class = 'tag_group_label',
+        actionLink(
+          inputId = paste0("insights_label_", gsub(" ", "_", t)), 
+          label = t, 
+          icon("caret-down")
+        ),
         
-        # Display checkbox groups for each subcategory within each tag type
-        div(
-          # Overarching tag types
-          class = 'tag_group_label',
-          actionLink(
-            inputId = paste0("insights_label_", gsub(" ", "_", t)), 
-            label = t, 
-            icon("caret-down")
-          ),
+        # Show/hide the info within each tag type
+        conditionalPanel(
+          condition = paste0("input.insights_label_", gsub(" ", "_", t)," % 2 == 0"),
           
-          # Show/hide the info within each tag type
-          conditionalPanel(
-            condition = paste0("input.insights_label_", gsub(" ", "_", t)," % 2 == 0"),
+          if (all(is.na(subcats))) {
+            # If there are no subcategories, just show the checkbox group
+            div(
+              class = 'tag_chkbox',
+              checkboxGroupInput(
+                inputId = paste0("insights_", gsub(" ", "_", t)),
+                label = NULL,
+                selected = NULL,
+                choiceNames = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)]),
+                choiceValues = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)])
+              )
+            )
             
-            if (all(is.na(subcats))) {
-              # If there are no subcategories, just show the checkbox group
-              div(
-                class = 'tag_chkbox',
-                checkboxGroupInput(
-                  inputId = paste0("insights_", gsub(" ", "_", t)),
-                  label = NULL,
-                  selected = NULL,
-                  choiceNames = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)]),
-                  choiceValues = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)])
-                )
-              )
-              
-            } else {
-              # Show subcategories within each tag type
-              div(
-                class = 'tag_subcat', 
-                lapply(subcats, function(s) {
-                  if (is.na(s)) {
-                    # Assign any tags without a subcategory to "Other"
-                    div(
-                      class = 'tag_group_label',
-                      actionLink(
-                        inputId = paste("insights", "label", gsub(" ", "_", t), "Other", sep = "_"),
-                        label = "Other",
-                        icon("caret-right")
-                      ),
-                      conditionalPanel(
-                        condition = paste0("input.insights_label_", gsub(" ", "_", t), "_Other", " % 2 == 1"),
-                        div(
-                          class = 'tag_chkbox',
-                          checkboxGroupInput(
-                            inputId = paste0("insights_", paste(gsub(" ", "_", t), "Other", sep = "--")),
-                            label = NULL,
-                            selected = NULL,
-                            choiceNames = sort(tags$Tags[is.na(tags$'Subcategory')]),
-                            choiceValues = sort(tags$Tags[is.na(tags$'Subcategory')])
-                          )
+          } else {
+            # Show subcategories within each tag type
+            div(
+              class = 'tag_subcat', 
+              lapply(subcats, function(s) {
+                if (is.na(s)) {
+                  # Assign any tags without a subcategory to "Other"
+                  div(
+                    class = 'tag_group_label',
+                    actionLink(
+                      inputId = paste("insights", "label", gsub(" ", "_", t), "Other", sep = "_"),
+                      label = "Other",
+                      icon("caret-right")
+                    ),
+                    conditionalPanel(
+                      condition = paste0("input.insights_label_", gsub(" ", "_", t), "_Other", " % 2 == 1"),
+                      div(
+                        class = 'tag_chkbox',
+                        checkboxGroupInput(
+                          inputId = paste0("insights_", paste(gsub(" ", "_", t), "Other", sep = "--")),
+                          label = NULL,
+                          selected = NULL,
+                          choiceNames = sort(tags$Tags[is.na(tags$'Subcategory')]),
+                          choiceValues = sort(tags$Tags[is.na(tags$'Subcategory')])
                         )
                       )
                     )
-                  } else {
-                    # Otherwise group tags together by their designated subcategory
-                    div(
-                      class = 'tag_group_label',
-                      actionLink(
-                        inputId = paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
-                        label = s,
-                        icon("caret-right")
-                      ),
-                      conditionalPanel(
-                        condition = paste0("input.insights_label_", gsub(" ", "_", t), "_", gsub(" ", "_", s), " % 2 == 1"),
-                        div(
-                          class = 'tag_chkbox',
-                          checkboxGroupInput(
-                            inputId = paste0("insights_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--")),
-                            label = NULL,
-                            selected = NULL,
-                            choiceNames = sort(tags$Tags[which(tags$'Subcategory' == s)]),
-                            choiceValues = sort(tags$Tags[which(tags$'Subcategory' == s)])
-                          )
+                  )
+                } else {
+                  # Otherwise group tags together by their designated subcategory
+                  div(
+                    class = 'tag_group_label',
+                    actionLink(
+                      inputId = paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
+                      label = s,
+                      icon("caret-right")
+                    ),
+                    conditionalPanel(
+                      condition = paste0("input.insights_label_", gsub(" ", "_", t), "_", gsub(" ", "_", s), " % 2 == 1"),
+                      div(
+                        class = 'tag_chkbox',
+                        checkboxGroupInput(
+                          inputId = paste0("insights_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--")),
+                          label = NULL,
+                          selected = NULL,
+                          choiceNames = sort(tags$Tags[which(tags$'Subcategory' == s)]),
+                          choiceValues = sort(tags$Tags[which(tags$'Subcategory' == s)])
                         )
                       )
                     )
-                  }
-                })
-              )
-            }
-          )
+                  )
+                }
+              })
+            )
+          }
         )
-      }
+      )
     })
   })
   
   ### Toggle the carets on the checkbox menu labels in the "Insights" tabs ----
   lapply(tag_types, function(t) {
-    if (t != "Resource Type") {
-      # Labels for tag types
-      observeEvent(input[[paste("insights", "label", gsub(" ", "_", t), sep = "_")]], {
-        if (input[[paste("insights", "label", gsub(" ", "_", t), sep = "_")]] %% 2 == 1) {
-          updateActionLink(
-            session = session,
-            inputId = paste("insights", "label", gsub(" ", "_", t), sep = "_"),
-            icon = icon("caret-right")
-          )
-        } else {
-          updateActionLink(
-            session = session,
-            inputId = paste("insights", "label", gsub(" ", "_", t), sep = "_"),
-            icon = icon("caret-down")
-          )
-        }
-      })
-      
-      # Labels for any subcategories
-      subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
-      
-      # If there are no subcategories, don't need to do anything more, so just checking for tag types with subcategories
-      if (!all(is.na(subcats))) {
-        lapply(subcats, function(s) {
-          if (is.na(s)) {
-            s <- "Other"
-          }
-          
-          # Toggle the carets on the checkbox menu labels
-          observeEvent(input[[paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_")]], {
-            if (input[[paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_")]] %% 2 == 1) {
-              updateActionLink(
-                session = session,
-                inputId = paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
-                icon = icon("caret-down")
-              )
-            } else {
-              updateActionLink(
-                session = session,
-                inputId = paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
-                icon = icon("caret-right")
-              )
-            }
-          })
-        })
+    # Labels for tag types
+    observeEvent(input[[paste("insights", "label", gsub(" ", "_", t), sep = "_")]], {
+      if (input[[paste("insights", "label", gsub(" ", "_", t), sep = "_")]] %% 2 == 1) {
+        updateActionLink(
+          session = session,
+          inputId = paste("insights", "label", gsub(" ", "_", t), sep = "_"),
+          icon = icon("caret-right")
+        )
+      } else {
+        updateActionLink(
+          session = session,
+          inputId = paste("insights", "label", gsub(" ", "_", t), sep = "_"),
+          icon = icon("caret-down")
+        )
       }
+    })
+    
+    # Labels for any subcategories
+    subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
+    
+    # If there are no subcategories, don't need to do anything more, so just checking for tag types with subcategories
+    if (!all(is.na(subcats))) {
+      lapply(subcats, function(s) {
+        if (is.na(s)) {
+          s <- "Other"
+        }
+        
+        # Toggle the carets on the checkbox menu labels
+        observeEvent(input[[paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_")]], {
+          if (input[[paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_")]] %% 2 == 1) {
+            updateActionLink(
+              session = session,
+              inputId = paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
+              icon = icon("caret-down")
+            )
+          } else {
+            updateActionLink(
+              session = session,
+              inputId = paste("insights", "label", gsub(" ", "_", t), gsub(" ", "_", s), sep = "_"),
+              icon = icon("caret-right")
+            )
+          }
+        })
+      })
     }
   })
   
   ### Filter Insights output according to selected checkboxes ----
   observeEvent(input$insights_go, {
-    insights_filtered_set <- insights_full_set()
+    # insights_filtered_set <- insights_full_set()
     
     # Update selected tags on button press
     selected_tags <-
@@ -1999,47 +1975,26 @@ server <- function(input, output, session) {
         subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
         select_tags_type <- c()
         if (all(is.na(subcats))) {
-          # If there are no subcategories, checkbox group ID is just the 
+          # If there are no subcategories, checkbox group ID is just the
           select_tags_type <- c(select_tags_type, input[[paste0("insights_", gsub(" ", "_", t))]])
         } else {
           for (s in subcats) {
             if (is.na(s)) {
               s <- "Other"
             }
-            
+
             select_tags_type <- c(select_tags_type, input[[paste0("insights_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--"))]])
           }
         }
-        
+
         return(select_tags_type)
       })
-    
+
     # Update names of the list to be each of the tag types
     selected_tags <- setNames(selected_tags, tag_types)
-    
+   
     # Get sources with the selected tags
-    if (!is.null(unlist(selected_tags))) {
-      # Filter according to each type of tag
-      for (tag_type in names(selected_tags)) {
-        if (!is.null(selected_tags[[tag_type]])) {
-          # Get user-selected tags for this tag type
-          get_select <- selected_tags[[tag_type]]
-          
-          # Remove any entries that don't align with the selected tags
-          keep_indices <- c()
-          for (i in 1:nrow(tmp_catalog)) {
-            # Get tags for i-th entry
-            i_tags <- strsplit(tmp_catalog[i, "Tags"], ";")[[1]]
-            i_tags <- trimws(i_tags)
-            # If i-th resource is not of the selected tag types, remove it from catalog
-            if (length(intersect(get_select, i_tags)) > 0) {
-              keep_indices <- c(keep_indices, i)
-            } 
-          }
-          insights_filtered_set <- insights_filtered_set[keep_indices,]
-        }
-      }
-    }
+    insights_filtered_set <- filter_by_tags(insights_full_set(), selected_tags)
     
     # Analytics for Insights tab based on view
     # insights_dists$type_counts <- get_type_dist(insights_filtered_set)
@@ -2048,33 +2003,32 @@ server <- function(input, output, session) {
     type_counts(get_type_dist(insights_filtered_set))
     year_counts(get_year_dist(insights_filtered_set))
     tags_counts(get_tags_dist(insights_filtered_set))
+    tags_connect_data(get_sankey_data(insights_filtered_set, list_of_tags))
   })
   
   ### Clear filters on Insights page ----
   observeEvent(input$insights_clear, {
     # Reset all of the tags checkboxes
     for (t in tag_types) {
-      if (t != "Resource Type") {
-        subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
-        
-        if (all(is.na(subcats))) {
+      subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
+      
+      if (all(is.na(subcats))) {
+        updateCheckboxGroupInput(
+          session, 
+          inputId = paste0("insights_", gsub(" ", "_", t)), 
+          selected = FALSE
+        )
+      } else {
+        for (s in subcats) {
+          if (is.na(s)) {
+            s <- "Other"
+          }
+          
           updateCheckboxGroupInput(
             session, 
-            inputId = paste0("insights_", gsub(" ", "_", t)), 
+            inputId = paste0("insights_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--")), 
             selected = FALSE
           )
-        } else {
-          for (s in subcats) {
-            if (is.na(s)) {
-              s <- "Other"
-            }
-            
-            updateCheckboxGroupInput(
-              session, 
-              inputId = paste0("insights_", paste(gsub(" ", "_", t), gsub(" ", "_", s), sep = "--")), 
-              selected = FALSE
-            )
-          }
         }
       }
     }
@@ -2086,6 +2040,7 @@ server <- function(input, output, session) {
     type_counts(get_type_dist(insights_full_set()))
     year_counts(get_year_dist(insights_full_set()))
     tags_counts(get_tags_dist(insights_full_set()))
+    tags_connect_data(get_sankey_data(insights_full_set(), list_of_tags))
   })
   
   ### Main Insights section with interactive plots ----
@@ -2143,20 +2098,21 @@ server <- function(input, output, session) {
               outputId = "insights_features_year_plot",
               height = '400px'
             )
-            
-            # plotlyOutput(
-            #   outputId = "insights_features_tags_plot",
-            #   height = '400px'
-            # ),
           ),
           
           tabPanel(
             title = "Tags",
             value = "insights_tags_plot",
             
-            d3wordcloudOutput(
-              outputId = "insights_tags_wordcloud",
-              height = "700px"
+            div(
+              br(),
+              
+              HTML("<i>*Hover over the text to see a count of the occurrences of each tag.</i>"),
+              
+              d3wordcloudOutput(
+                outputId = "insights_tags_wordcloud",
+                height = "700px"
+              )
             )
           ),
           
@@ -2164,14 +2120,10 @@ server <- function(input, output, session) {
             title = "Domain Connections", 
             value = "insights_connections_tab",
             
-            br(),
-            
-            HTML("<p><i>More coming soon...</i></p>")
-            
-            # plotlyOutput(
-            #   outputId = "insights_connections_plot",
-            #   height = "400px"
-            # )
+            sankeyNetworkOutput(
+              outputId = "insights_connections_sankey",
+              height = "1000px"
+            )
           )
         )
       )
@@ -2187,8 +2139,8 @@ server <- function(input, output, session) {
       rotate.max = 0,
       tooltip = TRUE,
       font = "Arial",
+      spiral = "rectangular"
     )
-    
   })
   
   # Type distribution
@@ -2231,41 +2183,17 @@ server <- function(input, output, session) {
     return(fig)
   })
   
-  # Tags distribution -- might get rid of this if wordcloud works out
-  output$insights_features_tags_plot <- renderPlotly({
-    # data <- data.frame(isolate(insights_dists$tags_counts), stringsAsFactors = FALSE)
-    data <- data.frame(tags_counts(), stringsAsFactors = FALSE)
-    
-    # Organize the values by counts from greatest to least
-    if (nrow(data) > 1) {
-      data$Var1 <- factor(data$Var1, levels = unique(data$Var1)[order(data$Freq, decreasing = TRUE)])
-      x_vals <- data$Var1
-      y_vals <- data$Freq
-    } else {
-      # No need to sort if there's only one type of count
-      # x_vals <- names(isolate(insights_dists$tags_counts))
-      # y_vals <- as.numeric(isolate(insights_dists$tags_counts))
-      x_vals <- names(tags_counts())
-      y_vals <- as.numeric(tags_counts())
-    }
-    
-    fig <- plot_ly(
-      x = x_vals,
-      y = y_vals,
-      type = "bar",
+  # Sankey diagram of tags
+  output$insights_connections_sankey <- renderSankeyNetwork({
+    sankeyNetwork(
+      Links = tags_connect_data()$links,
+      Nodes = tags_connect_data()$nodes,
+      Source = "IDsource",
+      Target = "IDtarget",
+      Value = "value",
+      NodeID = "name",
+      sinksRight = FALSE
     )
-    fig <- fig %>% layout(
-      title = "Tags Distribution",
-      xaxis = list(tickangle = 45, tickmode = "linear", tickfont = list(size = 10)),
-      yaxis = list(title = "Count"))
-    
-    return(fig)
-  })
-  
-  # Will eventually be the chord diagrams
-  output$insights_connections_plot <- renderPlotly({
-    plot_ly()
-    
   })
 
 }
