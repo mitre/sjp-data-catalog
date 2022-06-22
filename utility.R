@@ -364,56 +364,85 @@ filter_by_tags <- function(resource_set, tags_set) {
 
 # return data matrix to pass to sankey diagram
 get_sankey_data <- function(resource_set, list_of_tags) {
-  res_types <- list_of_tags$Tags[list_of_tags$'Tag Type' == "Resource Type"]
+  # res_types <- list_of_tags$Tags[list_of_tags$'Tag Type' == "Resource Type"]
+  res_types <- unique(unlist(lapply(strsplit(resource_set$Tags, '; '), function(x) {x[1]})))
+  all_tags <- unique(unlist(strsplit(resource_set$Tags, '; ')))
   
+  # Get the set of all "data subjects" and their associated domains
   domains <- unique(list_of_tags$Domain[list_of_tags$'Tag Type' == "Data Subject"])
   subjects_by_domain <- sapply(domains, function(d) {
     list_of_tags$Tags[(list_of_tags$'Tag Type' == "Data Subject") & (list_of_tags$Domain == d)]
   }, simplify = FALSE)
   subjects <- as.vector(unlist(subjects_by_domain))
   
+  res_subjects <- intersect(subjects, all_tags)
+  
+  # Get the set of all "data attributes" and their associated domains
   attr_domains <- unique(list_of_tags$Domain[list_of_tags$'Tag Type' == "Data Attribute"])
   attributes_by_domain <- sapply(attr_domains, function(d) {
     list_of_tags$Tags[(list_of_tags$'Tag Type' == "Data Attribute") & (list_of_tags$Domain == d)]
   }, simplify = FALSE)
   attributes <- as.vector(unlist(attributes_by_domain))
   
-  name <- c(res_types, domains, subjects, attributes)
-  subj_dom_counts <- lapply(subjects_by_domain, function(s) length(s))
-  attr_dom_counts <- lapply(attributes_by_domain, function(a) length(a))
-  group <- c(
-    res_types,
-    domains,
-    unlist(lapply(names(subj_dom_counts), function(x) {rep(x, subj_dom_counts[[x]])})), 
-    unlist(lapply(names(attr_dom_counts), function(x) {rep(x, attr_dom_counts[[x]])}))
-  )
+  res_attributes <- intersect(attributes, all_tags)
+  
+  # Nodes object
+  name <- c(res_types, res_subjects, res_attributes)
+  subj_doms <- unlist(lapply(res_subjects, function(s) {list_of_tags$Domain[list_of_tags$'Tags' == s]}))
+  attr_doms <- unlist(lapply(res_attributes, function(a) {list_of_tags$Domain[list_of_tags$'Tags' == a]}))
+  
+  # subj_dom_counts <- lapply(subjects_by_domain, function(s) length(intersect(s, res_subjects)))
+  # attr_dom_counts <- lapply(attributes_by_domain, function(a) length(intersect(a, res_subjects)))
+  # group <- c(
+  #   res_types,
+  #   unlist(lapply(names(subj_dom_counts), function(x) {rep(x, subj_dom_counts[[x]])})), 
+  #   unlist(lapply(names(attr_dom_counts), function(x) {rep(x, attr_dom_counts[[x]])}))
+  # )
+  group <- c(res_types, subj_doms, attr_doms)
   nodes <- data.frame(name, group)
   
+  # Links object
   links <- data.frame(matrix(ncol = 3, nrow = 0))
   colnames(links) <- c("source", "target", "value")
   
-  # Level 1: Resource Types --> Domains
+  # Compute weight of each link
+  link_weights <- data.frame(matrix(ncol=length(name), nrow=length(name)))
+  link_weights[is.na(link_weights)] <- 0
+  colnames(link_weights) <- rownames(link_weights) <- name
+  for (i in 1:nrow(resource_set)) {
+    # Get type of resource
+    i_tags <- trimws(strsplit(resource_set[i, "Tags"], ";")[[1]])
+    i_res_type <- i_tags[1]
+    i_subj <- intersect(i_tags, subjects)
+    i_attr <- intersect(i_tags, attributes)
+    
+    i_links <- rbind(expand.grid(i_res_type, i_subj), expand.grid(i_subj, i_attr))
+    for (j in 1:nrow(i_links)) {
+      node1 <- as.character(i_links[j, "Var1"])
+      node2 <- as.character(i_links[j, "Var2"])
+      if (!any(is.na(c(node1, node2)))) {
+        link_weights[node1, node2] <- link_weights[node2, node1] <- link_weights[node1, node2] + 1
+      }
+    }
+  }
+  
+  # Level 1: Resource Types --> Subjects
   for (r in res_types) {
-    for (d in domains) {
-      counts <- 10
-      links[nrow(links) + 1,] <- c(r, d, counts)
+    for (s in res_subjects) {
+      counts <- link_weights[r, s]
+      if (counts > 0) {
+        links[nrow(links) + 1,] <- c(r, s, counts)
+      }
     }
   }
   
-  # Level 2: Domains --> Subjects
-  for (d in domains) {
-    d_subjects <- subjects_by_domain[[d]]
-    for (s in d_subjects) {
-      counts <- 10
-      links[nrow(links) + 1,] <- c(d, s, counts)
-    }
-  }
-  
-  # Level 3: Subjects --> Attributes
-  for (s in subjects) {
-    for (a in attributes) {
-      counts <- 10
-      links[nrow(links) + 1,] <- c(s, a, counts)
+  # Level 2: Subjects --> Attributes
+  for (s in res_subjects) {
+    for (a in res_attributes) {
+      counts <- link_weights[s, a]
+      if (counts > 0) {
+        links[nrow(links) + 1,] <- c(s, a, counts)
+      }
     }
   }
   

@@ -24,6 +24,8 @@ library(rintrojs)
 library(lsa)
 library(plotly)
 library(networkD3)
+library(d3wordcloud)
+library(r2d3)
 
 
 
@@ -2192,7 +2194,9 @@ server <- function(input, output, session) {
       Target = "IDtarget",
       Value = "value",
       NodeID = "name",
-      sinksRight = FALSE
+      NodeGroup = "group",
+      sinksRight = FALSE,
+      iterations = 0
     )
   })
 
