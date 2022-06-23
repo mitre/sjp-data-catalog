@@ -23,10 +23,12 @@ library(bsplus)
 library(rintrojs)
 library(lsa)
 library(plotly)
-library(networkD3)
+# library(networkD3)
 library(d3wordcloud)
 library(r2d3)
-
+# install.packages("remotes")
+# remotes::install_github("fbreitwieser/sankeyD3")
+library(sankeyD3)
 
 
 # Data and Utility definitions ----
@@ -2085,6 +2087,7 @@ server <- function(input, output, session) {
           type = "tabs",
           id = "insight_plot_tabs",
           
+          # Tab for distribution output
           tabPanel(
             title = "Features",
             value = "insights_features_tab",
@@ -2102,29 +2105,35 @@ server <- function(input, output, session) {
             )
           ),
           
+          # Tab for wordcloud output
           tabPanel(
             title = "Tags",
             value = "insights_tags_plot",
             
-            div(
-              br(),
-              
-              HTML("<i>*Hover over the text to see a count of the occurrences of each tag.</i>"),
-              
-              d3wordcloudOutput(
-                outputId = "insights_tags_wordcloud",
-                height = "700px"
-              )
-            )
+            br(),
+            
+            HTML("<i>*Hover over the text to see a count of the occurrences of each tag.</i>"),
+            
+            # Commenting out for now until d3 figure package conflict is solved
+            # d3wordcloudOutput(
+            #   outputId = "insights_tags_wordcloud",
+            #   height = "700px"
+            # )
           ),
           
+          # Tab for sankey output
           tabPanel(
             title = "Domain Connections", 
             value = "insights_connections_tab",
             
+            br(),
+            
+            HTML("<i>*Hover over the nodes or individual links to see the connections in more detail. You can also zoom by 
+                 scrolling while the mouse is hovered over the figure then move the figure by clicking and dragging.</i>"),
+            
             sankeyNetworkOutput(
               outputId = "insights_connections_sankey",
-              height = "1000px"
+              height = "800px"
             )
           )
         )
@@ -2132,20 +2141,7 @@ server <- function(input, output, session) {
     )
   })
   
-  # Tags wordcloud
-  output$insights_tags_wordcloud <- renderD3wordcloud({
-    d3wordcloud(
-      words = names(tags_counts()), 
-      freq = tags_counts(), 
-      rotate.min = 0,           
-      rotate.max = 0,
-      tooltip = TRUE,
-      font = "Arial",
-      spiral = "rectangular"
-    )
-  })
-  
-  # Type distribution
+  #### Type distribution ----
   output$insights_features_type_plot <- renderPlotly({
     # data <- data.frame(isolate(insights_dists$type_counts), stringsAsFactors = FALSE)
     data <- data.frame(type_counts(), stringsAsFactors = FALSE)
@@ -2173,7 +2169,7 @@ server <- function(input, output, session) {
     return(fig)
   })
   
-  # Year distribution
+  #### Year distribution ----
   output$insights_features_year_plot <- renderPlotly({
     fig <- plot_ly(
       x = names(year_counts()),
@@ -2185,7 +2181,20 @@ server <- function(input, output, session) {
     return(fig)
   })
   
-  # Sankey diagram of tags
+  #### Tags wordcloud ----
+  output$insights_tags_wordcloud <- renderD3wordcloud({
+    d3wordcloud(
+      words = names(tags_counts()), 
+      freq = tags_counts(), 
+      rotate.min = 0,           
+      rotate.max = 0,
+      tooltip = TRUE,
+      font = "Arial",
+      spiral = "rectangular"
+    )
+  })
+  
+  #### Sankey diagram of tags ----
   output$insights_connections_sankey <- renderSankeyNetwork({
     sankeyNetwork(
       Links = tags_connect_data()$links,
@@ -2195,8 +2204,14 @@ server <- function(input, output, session) {
       Value = "value",
       NodeID = "name",
       NodeGroup = "group",
-      sinksRight = FALSE,
-      iterations = 0
+      iterations = 0,
+      zoom = TRUE,
+      dragX = FALSE,
+      dragY = FALSE,
+      showNodeValues = FALSE,
+      highlightChildLinks = TRUE,
+      numberFormat = ".0f",
+      linkOpacity = 0.25
     )
   })
 

@@ -180,47 +180,6 @@ get_all_sims <- function(full_catalog, catalog_features, sim_measure, total_tags
   return(out)
 }
 
-
-# Computes all the different similarity-related values in one loop (e.g. similarity measure, number of shared tags, list of shared tags, list of shared methodologies)
-# Inputs:
-#   - full_catalog: dataframe containing all resources in the catalog and their attributes
-#   - catalog_features: binary dataframe indicating what features each resource has
-#   - total_tags: total number of tags in catalog
-#   - count_types: boolean to determine whether to include the data type tags (e.g. dataset, repository, ...) should be counted, default is TRUE
-# Output:
-#   - out: list containing all of the various similarity measure matrices
-get_shared_tags <- function(full_catalog, catalog_features, total_tags, count_types=TRUE, thresh=0) {
-  all_types <- unique(unlist(lapply(strsplit(full_catalog$Tags, '; '), function(x) {x[1]})))
-  
-  # Lists of shared tags
-  n_tags_shared <- data.frame(matrix(nrow = nrow(catalog_features), ncol = nrow(catalog_features)))
-  
-  # Set row and col names of each matrix to be resource names
-  colnames(n_tags_shared) <- rownames(n_tags_shared) <- rownames(catalog_features)
-  
-  for (i in 1:(nrow(catalog_features)-1)) {
-    # Get features vector for resource i
-    i_feat <- as.numeric(as.vector(catalog_features[i, ]))
-    for (j in (i+1):nrow(catalog_features)) {
-      # Get features vector for resource j
-      j_feat <- as.numeric(as.vector(catalog_features[j, ]))
-      
-      # Get list of shared tags and assign values to n_tags_shared and tags_shared matrices
-      # Tags take up the first n_tags features in the vectors
-      tags_overlap <- intersect(colnames(catalog_features)[1:total_tags][as.logical(i_feat[1:total_tags])], colnames(catalog_features)[1:total_tags][as.logical(j_feat[1:total_tags])]) 
-      if (!count_types) {
-        tags_overlap <- tags_overlap[!(tags_overlap %in% all_types)]
-      }
-      
-      if (length(tags_overlap) > thresh) {
-        n_tags_shared[i, j] <- n_tags_shared[j, i] <- length(tags_overlap)
-      } 
-    }
-  }
-  
-  return(n_tags_shared)
-}
-
 # Get the count of each resource type found in resource_set 
 # Inputs:
 #   - resource_set: dataframe of a set of resources
@@ -282,52 +241,6 @@ get_tags_dist <- function(resource_set) {
 # Get a similarity matrix containing the number of shared resources among the set of tags
 # Inputs:
 #   - resource_set: dataframe of a set of resources
-# Output:
-#   - n_res_shared: dataframe where each cell (i, j) contains the number of resources that share tags i and j
-tag_connections <- function(resource_set) {
-  all_types <- unlist(lapply(strsplit(resource_set$Tags, '; '), function(x) {x[1]}))
-  type_counts <- sort(table(all_types), decreasing = TRUE)
-  
-  all_tags <- unique(unlist(strsplit(resource_set$Tags, '; ')))
-  types <- names(type_counts)
-  all_tags <- all_tags[!(all_tags %in% types)]
-  
-  names_to_tags <- strsplit(resource_set$Tags, '; ')
-  names(names_to_tags) <- resource_set$Name
-  
-  tags_to_names <- sapply(all_tags, function(x) c())
-  
-  for (res in names(names_to_tags)) {
-    res_tags <- names_to_tags[[res]]
-    for (t in res_tags) {
-      if (t %in% all_tags) {
-        tags_to_names[[t]] <- c(tags_to_names[[t]], res)
-      }
-    }
-  }
-  
-  n_res_shared <- data.frame(matrix(nrow = length(all_tags), ncol = length(all_tags)))
-  colnames(n_res_shared) <- rownames(n_res_shared) <- names(tags_to_names)
-  
-  for (i in 1:(length(tags_to_names)-1)) {
-    tag_i_res <- tags_to_names[[i]]
-    
-    for (j in (i+1):length(tags_to_names)) {
-      tag_j_res <- tags_to_names[[j]]
-      
-      res_overlap <- intersect(tag_i_res, tag_j_res)
-      
-      n_res_shared[i, j] <- n_res_shared[j, i] <- length(res_overlap)
-    }
-  }
-  
-  return(n_res_shared)
-}
-
-
-# Get a similarity matrix containing the number of shared resources among the set of tags
-# Inputs:
-#   - resource_set: dataframe of a set of resources
 #   - tags_set: list where keys are the tag types and values are the set of selected tags within that type
 # Output:
 #   - filtered_set: dataframe of resources filtered by tags_set
@@ -361,85 +274,93 @@ filter_by_tags <- function(resource_set, tags_set) {
   return(filtered_set)
 }
 
-
-# return data matrix to pass to sankey diagram
+# Return necessary data objects for generating a Sankey diagram of tag connections
+# Inputs:
+#   - resource_set: dataframe of a set of resources
+#   - list_of_tags: dataframe containing full list of available tags (pulled from Excel catalog "List of Tags" tab)
+# Output:
+#   - out: list containing the nodes and links dataframes to be passed to the Sankey network generation function
 get_sankey_data <- function(resource_set, list_of_tags) {
-  # res_types <- list_of_tags$Tags[list_of_tags$'Tag Type' == "Resource Type"]
-  res_types <- unique(unlist(lapply(strsplit(resource_set$Tags, '; '), function(x) {x[1]})))
+  # Get set of all tags utilized in resource_set
   all_tags <- unique(unlist(strsplit(resource_set$Tags, '; ')))
+  # Get the set of unique resource types in resource_set
+  res_types <- unique(unlist(lapply(strsplit(resource_set$Tags, '; '), function(x) {x[1]})))
   
-  # Get the set of all "data subjects" and their associated domains
+  # Get the complete set of available "data subjects" and their associated domains
   domains <- unique(list_of_tags$Domain[list_of_tags$'Tag Type' == "Data Subject"])
   subjects_by_domain <- sapply(domains, function(d) {
     list_of_tags$Tags[(list_of_tags$'Tag Type' == "Data Subject") & (list_of_tags$Domain == d)]
   }, simplify = FALSE)
   subjects <- as.vector(unlist(subjects_by_domain))
   
+  # Set of subjects present in resource_set
   res_subjects <- intersect(subjects, all_tags)
   
-  # Get the set of all "data attributes" and their associated domains
+  # Get the complete set of available "data subjects" and their associated domains
   attr_domains <- unique(list_of_tags$Domain[list_of_tags$'Tag Type' == "Data Attribute"])
   attributes_by_domain <- sapply(attr_domains, function(d) {
     list_of_tags$Tags[(list_of_tags$'Tag Type' == "Data Attribute") & (list_of_tags$Domain == d)]
   }, simplify = FALSE)
   attributes <- as.vector(unlist(attributes_by_domain))
   
+  # Set of attributes present in resource_set
   res_attributes <- intersect(attributes, all_tags)
   
-  # Nodes object
+  # Tag/node names
   name <- c(res_types, res_subjects, res_attributes)
+  
+  # Group the tag/node names according to their specified domain for coloring purposes
   subj_doms <- unlist(lapply(res_subjects, function(s) {list_of_tags$Domain[list_of_tags$'Tags' == s]}))
   attr_doms <- unlist(lapply(res_attributes, function(a) {list_of_tags$Domain[list_of_tags$'Tags' == a]}))
-  
-  # subj_dom_counts <- lapply(subjects_by_domain, function(s) length(intersect(s, res_subjects)))
-  # attr_dom_counts <- lapply(attributes_by_domain, function(a) length(intersect(a, res_subjects)))
-  # group <- c(
-  #   res_types,
-  #   unlist(lapply(names(subj_dom_counts), function(x) {rep(x, subj_dom_counts[[x]])})), 
-  #   unlist(lapply(names(attr_dom_counts), function(x) {rep(x, attr_dom_counts[[x]])}))
-  # )
   group <- c(res_types, subj_doms, attr_doms)
+  
+  # Nodes object
   nodes <- data.frame(name, group)
   
   # Links object
   links <- data.frame(matrix(ncol = 3, nrow = 0))
   colnames(links) <- c("source", "target", "value")
   
-  # Compute weight of each link
+  # Compute weight of each link (i.e. how many resources share tags between the two end nodes of the link)
+  # Generate weight matrix where row/colnames are tag names and cell (i,j) is the number of resources with tags i and j
   link_weights <- data.frame(matrix(ncol=length(name), nrow=length(name)))
   link_weights[is.na(link_weights)] <- 0
   colnames(link_weights) <- rownames(link_weights) <- name
   for (i in 1:nrow(resource_set)) {
-    # Get type of resource
+    # Resource_i information
     i_tags <- trimws(strsplit(resource_set[i, "Tags"], ";")[[1]])
     i_res_type <- i_tags[1]
     i_subj <- intersect(i_tags, subjects)
     i_attr <- intersect(i_tags, attributes)
     
+    # Set of possible links--cartesian product between resource types and subjects + cartesian product between subjects and attributes
     i_links <- rbind(expand.grid(i_res_type, i_subj), expand.grid(i_subj, i_attr))
     for (j in 1:nrow(i_links)) {
       node1 <- as.character(i_links[j, "Var1"])
       node2 <- as.character(i_links[j, "Var2"])
+      # If resource_i has both node1 and node2 tags, increase the link weight by 1
       if (!any(is.na(c(node1, node2)))) {
         link_weights[node1, node2] <- link_weights[node2, node1] <- link_weights[node1, node2] + 1
       }
     }
   }
   
-  # Level 1: Resource Types --> Subjects
+  # Level 1 Connections: Resource Types --> Subjects
   for (r in res_types) {
     for (s in res_subjects) {
       counts <- link_weights[r, s]
+      # Only add link to dataframe if it has nonzero count (otherwise the link will still be visible on the figure even with count=0)
       if (counts > 0) {
         links[nrow(links) + 1,] <- c(r, s, counts)
       }
     }
   }
   
-  # Level 2: Subjects --> Attributes
+  # Level 2 Connections: Subjects --> Attributes
   for (s in res_subjects) {
     for (a in res_attributes) {
       counts <- link_weights[s, a]
+      # Only add link to dataframe if it has nonzero count (otherwise the link will still be visible on the figure even with count=0)
       if (counts > 0) {
         links[nrow(links) + 1,] <- c(s, a, counts)
       }
