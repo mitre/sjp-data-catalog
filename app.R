@@ -16,6 +16,7 @@ library(shinyWidgets)
 library(readxl)
 library(plyr)
 library(dplyr)
+library(RColorBrewer)
 library(htmltools)
 library(MITREShiny)
 library(rmarkdown)
@@ -415,10 +416,25 @@ ui <- MITREnavbarPage(
         
         br(),
         
-        p("You can use the Insights tab to explore the contents of the catalog through a more conceptual lens. The following plots and 
-          visuals will help visualize the types of features and themes present among the gathered resources."),
+        HTML("<p>The <i>Insights</i> tab provides tools and visualizations for exploring the catalog contents from an overarching
+        conceptual lens. You can choose to explore these analyses for the entire data catalog or for the set of resources currently 
+        in the <i>Saved Resources</i> tab. The following plots and visuals will help visualize the types of features and themes 
+        present among the specified set of resources.</p>
         
-        p("You can choose to explore analyses for the whole SJP data catalog or for just your saved resources."),
+        <ul>
+          <li><b>Features</b>: The <i>Features</i> tab contains distributions of data types and years available. </li>
+          <br>
+          <li><b>Tags</b>: The <i>Tags</i> tab contains a wordcloud depicting the frequency with which the tags
+          are presents among the set of resources. This is useful for visualizing what domains and features are most prevalent
+          among the data as well as the general breadth or scope of the data across these domains/features.</li>
+          <br>
+          <li><b>Domain Connections</b>: The <i>Domain Connections</i> tab contains an interactive network diagram which shows
+          the different flows or connections between various resource attributes. This is useful for investigating...</li>
+        </ul>
+             
+        <p>You can also use the filters in the sidebar to explore specific subsets of resources according to various data types
+        and domains.</p>"),
+
         
         br(),
         
@@ -448,6 +464,10 @@ ui <- MITREnavbarPage(
       
       column(
         width = 8,
+        
+        # Had to split up About page into two HTML files because the Catalog Contents section needs to be dynamic
+        # relative to the actual contents in the catalog. Needed to pull the subsection out of the HTML file so that
+        # it could access the necessary dynamic values.
         
         includeHTML("www/about_overview_intro.html"),
         
@@ -2114,11 +2134,10 @@ server <- function(input, output, session) {
             
             HTML("<i>*Hover over the text to see a count of the occurrences of each tag.</i>"),
             
-            # Commenting out for now until d3 figure package conflict is solved
-            # d3wordcloudOutput(
-            #   outputId = "insights_tags_wordcloud",
-            #   height = "700px"
-            # )
+            d3wordcloudOutput(
+              outputId = "insights_tags_wordcloud",
+              height = "700px"
+            )
           ),
           
           # Tab for sankey output
@@ -2131,7 +2150,12 @@ server <- function(input, output, session) {
             HTML("<i>*Hover over the nodes or individual links to see the connections in more detail. You can also zoom by 
                  scrolling while the mouse is hovered over the figure then move the figure by clicking and dragging.</i>"),
             
-            sankeyNetworkOutput(
+            # sankeyNetworkOutput(
+            #   outputId = "insights_connections_sankey",
+            #   height = "800px"
+            # )
+            
+            plotlyOutput(
               outputId = "insights_connections_sankey",
               height = "800px"
             )
@@ -2195,24 +2219,66 @@ server <- function(input, output, session) {
   })
   
   #### Sankey diagram of tags ----
-  output$insights_connections_sankey <- renderSankeyNetwork({
-    sankeyNetwork(
-      Links = tags_connect_data()$links,
-      Nodes = tags_connect_data()$nodes,
-      Source = "IDsource",
-      Target = "IDtarget",
-      Value = "value",
-      NodeID = "name",
-      NodeGroup = "group",
-      iterations = 0,
-      zoom = TRUE,
-      dragX = FALSE,
-      dragY = FALSE,
-      showNodeValues = FALSE,
-      highlightChildLinks = TRUE,
-      numberFormat = ".0f",
-      linkOpacity = 0.25
+  # output$insights_connections_sankey <- renderSankeyNetwork({
+  #   sankeyNetwork(
+  #     Links = tags_connect_data()$links,
+  #     Nodes = tags_connect_data()$nodes,
+  #     Source = "IDsource",
+  #     Target = "IDtarget",
+  #     Value = "value",
+  #     NodeID = "name",
+  #     NodeGroup = "group",
+  #     iterations = 0,
+  #     zoom = TRUE,
+  #     dragX = FALSE,
+  #     dragY = FALSE,
+  #     showNodeValues = FALSE,
+  #     highlightChildLinks = TRUE,
+  #     numberFormat = ".0f",
+  #     linkOpacity = 0.25
+  #   )
+  # })
+  
+  output$insights_connections_sankey <- renderPlotly({
+    fig <- plot_ly(
+      type = "sankey",
+      arrangement = "snap",
+      domain = list(
+        x =  c(0,1),
+        y =  c(0,1)
+      ),
+      orientation = "h",
+      valueformat = ".0f",
+
+      node = list(
+        label = tags_connect_data()$nodes$name,
+        color = tags_connect_data()$nodes$color,
+        # x = tags_connect_data()$nodes$x_pos,
+        # y = tags_connect_data()$nodes$y_pos,
+        pad = 15,
+        thickness = 15
+        # line = list(
+        #   color = "black",
+        #   width = 0.5
+        # )
+      ),
+
+      link = list(
+        source = tags_connect_data()$links$IDsource,
+        target = tags_connect_data()$links$IDtarget,
+        value = tags_connect_data()$links$value,
+        label = rep("", nrow(tags_connect_data()$links))
+      )
     )
+    fig <- fig %>% layout(
+      font = list(
+        size = 10
+      ),
+      xaxis = list(showgrid = F, zeroline = F),
+      yaxis = list(showgrid = F, zeroline = F)
+    )
+
+    fig
   })
 
 }

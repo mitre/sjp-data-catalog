@@ -283,6 +283,8 @@ filter_by_tags <- function(resource_set, tags_set) {
 get_sankey_data <- function(resource_set, list_of_tags) {
   # Get set of all tags utilized in resource_set
   all_tags <- unique(unlist(strsplit(resource_set$Tags, '; ')))
+  # Get the complete set of available data types
+  all_types <- unique(list_of_tags$'Tags'[list_of_tags$'Tag Type' == "Resource Type"])
   # Get the set of unique resource types in resource_set
   res_types <- unique(unlist(lapply(strsplit(resource_set$Tags, '; '), function(x) {x[1]})))
   
@@ -306,6 +308,12 @@ get_sankey_data <- function(resource_set, list_of_tags) {
   # Set of attributes present in resource_set
   res_attributes <- intersect(attributes, all_tags)
   
+  # Create universal color map that's based on all possible values so it doesn't change when resource_set changes
+  color_cats <- c(all_types, domains, attr_domains)
+  color_pal <- suppressWarnings(brewer.pal(length(color_cats), "Set1"))
+  color_map <- lapply(1:length(color_cats), function(i) {color_pal[((i-0) %% length(color_pal)) + 1]})
+  names(color_map) <- color_cats
+  
   # Tag/node names
   name <- c(res_types, res_subjects, res_attributes)
   
@@ -313,9 +321,12 @@ get_sankey_data <- function(resource_set, list_of_tags) {
   subj_doms <- unlist(lapply(res_subjects, function(s) {list_of_tags$Domain[list_of_tags$'Tags' == s]}))
   attr_doms <- unlist(lapply(res_attributes, function(a) {list_of_tags$Domain[list_of_tags$'Tags' == a]}))
   group <- c(res_types, subj_doms, attr_doms)
+  color <- unlist(lapply(group, function(g) {color_map[[g]]}))
+  x_pos <- c(rep(0.01, length(res_types)), rep(0.5, length(subj_doms)), rep(0.99, length(attr_doms)))
+  y_pos <- c(seq(0.01, 0.95, length.out=length(res_types)), seq(0.01, 0.95, length.out=length(subj_doms)), seq(0.01, 0.95, length.out=length(attr_doms)))
   
   # Nodes object
-  nodes <- data.frame(name, group)
+  nodes <- data.frame(name, group, color, x_pos, y_pos)
   
   # Links object
   links <- data.frame(matrix(ncol = 3, nrow = 0))
