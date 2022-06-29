@@ -416,25 +416,7 @@ ui <- MITREnavbarPage(
         
         br(),
         
-        HTML("<p>The <i>Insights</i> tab provides tools and visualizations for exploring the catalog contents from an overarching
-        conceptual lens. You can choose to explore these analyses for the entire data catalog or for the set of resources currently 
-        in the <i>Saved Resources</i> tab. The following plots and visuals will help visualize the types of features and themes 
-        present among the specified set of resources.</p>
-        
-        <ul>
-          <li><b>Features</b>: The <i>Features</i> tab contains distributions of data types and years available. </li>
-          <br>
-          <li><b>Tags</b>: The <i>Tags</i> tab contains a wordcloud depicting the frequency with which the tags
-          are presents among the set of resources. This is useful for visualizing what domains and features are most prevalent
-          among the data as well as the general breadth or scope of the data across these domains/features.</li>
-          <br>
-          <li><b>Domain Connections</b>: The <i>Domain Connections</i> tab contains an interactive network diagram which shows
-          the different flows or connections between various resource attributes. This is useful for investigating...</li>
-        </ul>
-             
-        <p>You can also use the filters in the sidebar to explore specific subsets of resources according to various data types
-        and domains.</p>"),
-
+        includeHTML("www/insights.html"),
         
         br(),
         

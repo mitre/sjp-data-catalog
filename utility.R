@@ -322,6 +322,7 @@ get_sankey_data <- function(resource_set, list_of_tags) {
   attr_doms <- unlist(lapply(res_attributes, function(a) {list_of_tags$Domain[list_of_tags$'Tags' == a]}))
   group <- c(res_types, subj_doms, attr_doms)
   color <- unlist(lapply(group, function(g) {color_map[[g]]}))
+  # Generate node coordinates (this is how plotly sankey diagram allows node ordering)
   x_pos <- c(rep(0.01, length(res_types)), rep(0.5, length(subj_doms)), rep(0.99, length(attr_doms)))
   y_pos <- c(seq(0.01, 0.95, length.out=length(res_types)), seq(0.01, 0.95, length.out=length(subj_doms)), seq(0.01, 0.95, length.out=length(attr_doms)))
   
