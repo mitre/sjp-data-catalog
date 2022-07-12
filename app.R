@@ -537,6 +537,39 @@ server <- function(input, output, session) {
   tags_connect_data <- reactiveVal(get_sankey_data(full_catalog, list_of_tags))
   
   
+  ## Welcome Modal ----
+
+  welcome_modal <- modalDialog(
+    title = HTML("<center><b>Welcome to the Social Justice Platform Data Catalog!</center></b>"),
+    
+    HTML("<p>The Social Justice Platform (SJP) Data Catalog is an open source collection of data sets, resources, and tools with a specific emphasis 
+    on social justice. The goal of this catalog is to provide a focused repository of social justice and equity resources where researchers and 
+    analysts can go to explore relevant data for their projects. </p>
+    
+    <p>The dashboard allows users to interactively search through the catalog, explore recommended resources, save interesting or relevant resources, 
+    and view conceptual analyses of the various catalog metadata. </p>
+    
+    <p>The catalog itself is a collection of __ resources, spanning across multiple decades, geographic levels, and topic domains. The wordcloud 
+    below provides a visualization of some of the types of features that are represented and most prominent within the catalog.</p>
+    
+    <p>Click the “Start Exploring!” button to get started!</p>
+    <center><img src='wordcloud.png', height='350px'></center>"),
+    
+    footer = div(
+      align = "center", 
+      actionButton("close_modal", label="Start exploring!", class="btn-primary")
+    ),
+    easyClose = TRUE,
+    size = "l"
+  )
+  
+  showModal(welcome_modal)
+  
+  observeEvent(input$close_modal, {
+    removeModal()
+  })
+  
+  
   ## Search Catalog: Filter by tags ----
 
   ### Generate collapsible menus for the filter by tag checkboxes ----
@@ -2101,9 +2134,8 @@ server <- function(input, output, session) {
               height = '400px'
             ),
             
-            plotlyOutput(
-              outputId = "insights_features_year_plot",
-              height = '400px'
+            uiOutput(
+              outputId = "year_plot_space"
             )
           ),
           
@@ -2176,6 +2208,16 @@ server <- function(input, output, session) {
   })
   
   #### Year distribution ----
+  output$year_plot_space <- renderUI({
+    if(length(year_counts()) == 0) {
+      HTML("<br><center><p><i>[No available years to show]</i></p></center>")
+    } else {
+      plotlyOutput(
+        outputId = "insights_features_year_plot",
+        height = '400px'
+      )
+    }
+  })
   output$insights_features_year_plot <- renderPlotly({
     fig <- plot_ly(
       x = names(year_counts()),
