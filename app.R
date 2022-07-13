@@ -536,6 +536,11 @@ server <- function(input, output, session) {
   tags_counts <- reactiveVal(get_tags_dist(full_catalog))
   tags_connect_data <- reactiveVal(get_sankey_data(full_catalog, list_of_tags))
   
+  # For Insights tab--data for tags used in the selected set
+  used_tags_tmp <- unique(unlist(lapply(full_catalog$Tags, function(x) strsplit(x, "; ")))) #making tmp variable to access in both reactiveVals below
+  used_tags <- reactiveVal(used_tags_tmp)
+  list_of_used_tags <- reactiveVal(list_of_tags %>% filter(Tags %in% used_tags_tmp))
+  
   
   ## Welcome Modal ----
 
@@ -1782,6 +1787,7 @@ server <- function(input, output, session) {
   
   ## Insights: Switch view ----
   
+  # User toggles between viewing the "Catalog" or their "Saved Resources"
   observeEvent(input$insights_view, {
     # Determine which set of resources to perform analytics on
     if (input$insights_view == "View Catalog") {
@@ -1791,9 +1797,13 @@ server <- function(input, output, session) {
       insights_full_set(shopping_list_df)
     }
     
+    # Update list of used tags depending on what set of resources is selected
+    used_tags(unique(unlist(lapply(insights_full_set()$Tags, function(x) strsplit(x, "; ")))))
+    list_of_used_tags(list_of_tags %>% filter(Tags %in% used_tags()))
+    
     # Reset all of the tags checkboxes
     for (t in tag_types) {
-      subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
+      subcats <- unique(list_of_used_tags()[list_of_used_tags()$'Tag Type' == t, ]$Subcategory)
       
       if (all(is.na(subcats))) {
         updateCheckboxGroupInput(
@@ -1827,8 +1837,8 @@ server <- function(input, output, session) {
   })
   
   observeEvent(shopping_list(), {
-    # If there are no things in the shopping cart, disable that option from the Insights tab and switch back to Catalog view
     if (length(shopping_list()) > 0) {
+      # If there are items in the shopping cart, enable both viewing options
       updateRadioGroupButtons(
         session,
         inputId = "insights_view",
@@ -1849,7 +1859,9 @@ server <- function(input, output, session) {
         tags_counts(get_tags_dist(insights_full_set()))
         tags_connect_data(get_sankey_data(insights_full_set(), list_of_tags))
       }
+      
     } else {
+      # If there are no things in the shopping cart, disable that option from the Insights tab and switch back to Catalog view
       updateRadioGroupButtons(
         session,
         inputId = "insights_view",
@@ -1863,8 +1875,8 @@ server <- function(input, output, session) {
   
   ### Generate collapsible menus for the filter by tag checkboxes ----
   output$insights_filter <- renderUI({
-    lapply(tag_types, function(t) {
-      tags <- list_of_tags[list_of_tags$'Tag Type' == t, ]
+    lapply(unique(list_of_used_tags()$'Tag Type'), function(t) {
+      tags <- list_of_used_tags()[list_of_used_tags()$'Tag Type' == t, ]
       subcats <- sort(unique(tags$Subcategory), na.last = TRUE)
       
       # Display checkbox groups for each subcategory within each tag type
@@ -1889,8 +1901,8 @@ server <- function(input, output, session) {
                 inputId = paste0("insights_", gsub(" ", "_", t)),
                 label = NULL,
                 selected = NULL,
-                choiceNames = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)]),
-                choiceValues = sort(list_of_tags$Tags[which(list_of_tags$'Tag Type' == t)])
+                choiceNames = sort(list_of_used_tags()$Tags[which(list_of_used_tags()$'Tag Type' == t)]),
+                choiceValues = sort(list_of_used_tags()$Tags[which(list_of_used_tags()$'Tag Type' == t)])
               )
             )
             
@@ -1955,7 +1967,9 @@ server <- function(input, output, session) {
   })
   
   ### Toggle the carets on the checkbox menu labels in the "Insights" tabs ----
-  lapply(tag_types, function(t) {
+  
+  # Should really be a lapply over list_of_used_tags() but can't access the reactive outside of an observe/render...
+  lapply(unique(list_of_tags$'Tag Type'), function(t) {
     # Labels for tag types
     observeEvent(input[[paste("insights", "label", gsub(" ", "_", t), sep = "_")]], {
       if (input[[paste("insights", "label", gsub(" ", "_", t), sep = "_")]] %% 2 == 1) {
@@ -2005,13 +2019,11 @@ server <- function(input, output, session) {
   
   ### Filter Insights output according to selected checkboxes ----
   observeEvent(input$insights_go, {
-    # insights_filtered_set <- insights_full_set()
-    
     # Update selected tags on button press
     selected_tags <-
       lapply(tag_types, function(t) {
         # Want to group tags from the subcategories together to pass to selected_tags
-        subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
+        subcats <- unique(list_of_used_tags()[list_of_used_tags()$'Tag Type' == t, ]$Subcategory)
         select_tags_type <- c()
         if (all(is.na(subcats))) {
           # If there are no subcategories, checkbox group ID is just the
@@ -2049,7 +2061,7 @@ server <- function(input, output, session) {
   observeEvent(input$insights_clear, {
     # Reset all of the tags checkboxes
     for (t in tag_types) {
-      subcats <- unique(list_of_tags[list_of_tags$'Tag Type' == t, ]$Subcategory)
+      subcats <- unique(list_of_used_tags()[list_of_used_tags()$'Tag Type' == t, ]$Subcategory)
       
       if (all(is.na(subcats))) {
         updateCheckboxGroupInput(
