@@ -542,18 +542,18 @@ server <- function(input, output, session) {
   welcome_modal <- modalDialog(
     title = HTML("<center><b>Welcome to the Social Justice Platform Data Catalog!</center></b>"),
     
-    HTML("<p>The Social Justice Platform (SJP) Data Catalog is an open source collection of data sets, resources, and tools with a specific emphasis 
-    on social justice. The goal of this catalog is to provide a focused repository of social justice and equity resources where researchers and 
-    analysts can go to explore relevant data for their projects. </p>
+    HTML(paste0("<p>The Social Justice Platform (SJP) Data Catalog is an open source collection of data sets, resources, and tools with a specific 
+    emphasis on social justice. The goal of this catalog is to provide a focused repository of social justice and equity resources where researchers 
+    and analysts can go to explore relevant data for their projects. </p>
     
     <p>The dashboard allows users to interactively search through the catalog, explore recommended resources, save interesting or relevant resources, 
     and view conceptual analyses of the various catalog metadata. </p>
     
-    <p>The catalog itself is a collection of __ resources, spanning across multiple decades, geographic levels, and topic domains. The wordcloud 
+    <p>The catalog itself is a collection of ", nrow(full_catalog), " resources, spanning across multiple decades, geographic levels, and topic domains. The wordcloud 
     below provides a visualization of some of the types of features that are represented and most prominent within the catalog.</p>
     
     <p>Click the “Start Exploring!” button to get started!</p>
-    <center><img src='wordcloud.png', height='350px'></center>"),
+    <center><img src='wordcloud.png', height='350px'></center>")),
     
     footer = div(
       align = "center", 
