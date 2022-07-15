@@ -411,6 +411,8 @@ ui <- MITREnavbarPage(
         
         h1("Insights"),
         
+        # HTML("<img src='wordcloud.png', height='300px'>"),
+        
         br(),
         
         includeHTML("www/insights.html"),
@@ -2040,8 +2042,14 @@ server <- function(input, output, session) {
             
             br(),
             
-            HTML("<i>*Hover over the nodes or individual links to see the connections in more detail. You can also zoom by 
-                 scrolling while the mouse is hovered over the figure then move the figure by clicking and dragging.</i>"),
+            HTML("<p><i>*Hover over the nodes or individual links to see the connections in more detail. You can also zoom by 
+                 scrolling while the mouse is hovered over the figure then move the figure by clicking and dragging.</i></p>"),
+            
+            uiOutput(
+              outputId = "sankey_legend"
+            ),
+            
+            br(),
             
             sankeyNetworkOutput(
               outputId = "insights_connections_sankey",
@@ -2145,6 +2153,30 @@ server <- function(input, output, session) {
   })
   
   #### Sankey diagram of tags ----
+  output$sankey_legend <- renderUI({
+    nodes_df <- tags_connect_data()$nodes
+    color_map <- unique(nodes[c("group", "color", "x_pos")])
+    level_map <- list("0"="Resource Type", "1"="Data Subject", "2"="Data Attribute")
+    current_level <- -1
+    
+    legend <- ""
+    
+    for (i in 1:nrow(color_map)) {
+      label <- color_map[i, "group"]
+      color <- color_map[i, "color"]
+      level <- color_map[i, "x_pos"]
+      
+      if (level != current_level) {
+        legend <- paste0(legend, "<br><span><b>", level_map[[toString(level)]], ":&nbsp;</b></span>")
+        current_level <- current_level + 1
+      }
+      
+      legend <- paste0(legend, '<span style="background-color:', color, ';border:1px solid black;height:11px;width:11px;display:inline-block;"></span><span>&nbsp;', label, '&emsp;<span>')
+    }
+    
+    HTML(legend)
+  })
+  
   output$insights_connections_sankey <- renderSankeyNetwork({
     sankeyNetwork(
       Links = tags_connect_data()$links,
@@ -2156,6 +2188,7 @@ server <- function(input, output, session) {
       NodeGroup = "group",
       NodeColor = "color",
       NodePosX = "x_pos",
+      iterations = 0,
       zoom = TRUE,
       dragX = FALSE,
       dragY = FALSE,
