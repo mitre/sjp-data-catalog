@@ -411,8 +411,6 @@ ui <- MITREnavbarPage(
         
         h1("Insights"),
         
-        # HTML("<img src='wordcloud.png', height='300px'>"),
-        
         br(),
         
         includeHTML("www/insights.html"),
