@@ -525,9 +525,6 @@ server <- function(input, output, session) {
   # For Insights tab--data and distributions for display 
   insights_full_set <- reactiveVal(full_catalog)
   insights_filtered_set <- reactiveVal(full_catalog)
-  # insights_dists <- reactiveValues("type_counts" = get_type_dist(full_catalog),
-  #                                  "year_counts" = get_year_dist(full_catalog),
-  #                                  "tags_counts" = get_tags_dist(full_catalog))
   type_counts <- reactiveVal(get_type_dist(full_catalog))
   year_counts <- reactiveVal(get_year_dist(full_catalog))
   tags_counts <- reactiveVal(get_tags_dist(full_catalog))
@@ -1840,9 +1837,6 @@ server <- function(input, output, session) {
     }
 
     # Recompute data for graphs
-    # insights_dists$type_counts <- get_type_dist(insights_full_set())
-    # insights_dists$year_counts <- get_year_dist(insights_full_set())
-    # insights_dists$tags_counts <- get_tags_dist(insights_full_set())
     type_counts(get_type_dist(insights_full_set()))
     year_counts(get_year_dist(insights_full_set()))
     tags_counts(get_tags_dist(insights_full_set()))
@@ -1864,9 +1858,6 @@ server <- function(input, output, session) {
         insights_full_set(shopping_list_df)
         
         # Recompute data for graphs
-        # insights_dists$type_counts <- get_type_dist(insights_full_set())
-        # insights_dists$year_counts <- get_year_dist(insights_full_set())
-        # insights_dists$tags_counts <- get_tags_dist(insights_full_set())
         type_counts(get_type_dist(insights_full_set()))
         year_counts(get_year_dist(insights_full_set()))
         tags_counts(get_tags_dist(insights_full_set()))
@@ -1917,9 +1908,6 @@ server <- function(input, output, session) {
     insights_filtered_set <- filter_by_tags(insights_full_set(), selected_tags)
     
     # Analytics for Insights tab based on view
-    # insights_dists$type_counts <- get_type_dist(insights_filtered_set)
-    # insights_dists$year_counts <- get_year_dist(insights_filtered_set)
-    # insights_dists$tags_counts <- get_tags_dist(insights_filtered_set)
     type_counts(get_type_dist(insights_filtered_set))
     year_counts(get_year_dist(insights_filtered_set))
     tags_counts(get_tags_dist(insights_filtered_set))
@@ -1954,9 +1942,6 @@ server <- function(input, output, session) {
     }
     
     # Recompute data for graphs
-    # insights_dists$type_counts <- get_type_dist(insights_full_set())
-    # insights_dists$year_counts <- get_year_dist(insights_full_set())
-    # insights_dists$tags_counts <- get_tags_dist(insights_full_set())
     type_counts(get_type_dist(insights_full_set()))
     year_counts(get_year_dist(insights_full_set()))
     tags_counts(get_tags_dist(insights_full_set()))
@@ -2061,7 +2046,6 @@ server <- function(input, output, session) {
   
   #### Type distribution ----
   output$insights_features_type_plot <- renderPlotly({
-    # data <- data.frame(isolate(insights_dists$type_counts), stringsAsFactors = FALSE)
     data <- data.frame(type_counts(), stringsAsFactors = FALSE)
     
     # Organize the values by counts from greatest to least
@@ -2071,8 +2055,6 @@ server <- function(input, output, session) {
       y_vals <- data$Freq
     } else {
       # No need to sort if there's only one type of count
-      # x_vals <- names(isolate(insights_dists$type_counts))
-      # y_vals <- as.numeric(isolate(insights_dists$type_counts))
       x_vals <- names(type_counts())
       y_vals <- as.numeric(type_counts())
     }
@@ -2118,7 +2100,7 @@ server <- function(input, output, session) {
       data$Var1 <- factor(data$Var1, levels = unique(data$Var1)[order(data$Freq, decreasing = FALSE)])
     }
     
-    # # initiate a line shape object
+    # # initiate a line shape object - for lollipop plot
     # line <- list(
     #   type = "line",
     #   line = list(color = "gray", width=1),
@@ -2152,7 +2134,7 @@ server <- function(input, output, session) {
   
   #### Sankey diagram of tags ----
   output$sankey_legend <- renderUI({
-    nodes_df <- tags_connect_data()$nodes
+    nodes <- tags_connect_data()$nodes
     color_map <- unique(nodes[c("group", "color", "x_pos")])
     level_map <- list("0"="Resource Type", "1"="Data Subject", "2"="Data Attribute")
     current_level <- -1
