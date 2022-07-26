@@ -165,9 +165,6 @@ ui <- MITREnavbarPage(
     # To activate the use of popovers in your page
     use_bs_popover(),
     
-    # To activate the rintrojs tutorial package
-    introjsUI(),
-    
     sidebarLayout(
       sidebarPanel(
         width = 3,
