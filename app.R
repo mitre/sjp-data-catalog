@@ -148,6 +148,9 @@ ui <- MITREnavbarPage(
     title = "Search Catalog",
     value = "search_tab",
     
+    # To activate the disabling/enabling of buttons
+    shinyjs::useShinyjs(),
+    
     # Get name of event triggered
     tags$head(
       tags$script(
@@ -373,14 +376,14 @@ ui <- MITREnavbarPage(
                 label = "Export...",
                 circle = FALSE,
                 inline = TRUE,
-                actionLink(
-                  inputId = "export_to_csv",
+                downloadLink(
+                  outputId = "export_to_csv",
                   label = "To CSV"
+                ),
+                downloadLink(
+                  outputId = "export_to_html",
+                  label = "To HTML"
                 )
-                # actionLink(
-                #   inputId = "export_to_pdf",
-                #   label = "To PDF"
-                # )
               )
             )
           )
@@ -1736,64 +1739,53 @@ server <- function(input, output, session) {
   })
   
   # Exports a dataframe of all saved resources and their associated fields to a csv
-  observeEvent(input$export_to_csv, {
-    if (length(shopping_list()) > 0) {
-      col_names <- names(shopping_list()[[names(shopping_list())[1]]])
-      cart_df <- data.frame(matrix(ncol=length(col_names), nrow=0))
-      colnames(cart_df) <- col_names
-      
-      for (n in names(shopping_list())){
-        cart_df[nrow(cart_df)+1, ] <- shopping_list()[[n]]
-      }
-      
-      write.csv(x = cart_df, file = choose.files(default=paste0("SavedResources_SJPCatalog_", format(Sys.time(), "%Y%m%d-%H%M%S"), ".csv"), caption="Save file", multi=FALSE))
-      
-      # Modal to confirm that CSV has been saved
-      showModal(
-        modalDialog(
-          HTML("Successfully downloaded a CSV with all saved resources!"),
-          footer = NULL,
-          easyClose = TRUE,
-          fade = FALSE
-        )
-      )
-    } 
-  })
+  output$export_to_csv <- downloadHandler(
+    filename = function() {
+      paste0("SavedResources_SJPCatalog_", format(Sys.time(), "%Y%m%d-%H%M%S"), ".csv")
+    },
+    content = function(file) {
+      shopping_list_df <- as.data.frame(do.call(rbind, shopping_list()))
+      write.csv(shopping_list_df, file, row.names = FALSE)
+    }
+  )
   
   # Exports a PDF report with the list of saved resources as well as some other info
-  observeEvent(input$export_to_pdf, {
-    if (length(shopping_list()) > 0) {
-      filename = paste0("SavedResourcesReport_SJPCatalog_", format(Sys.time(), "%Y%m%d-%H%M%S"), ".html")
+  output$export_to_html <- downloadHandler(
+    filename = function() {
+      paste0("SavedResourcesReport_SJPCatalog_", format(Sys.time(), "%Y%m%d-%H%M%S"), ".html")
+    },
+    content = function(file) {
+      rmd_report <- file.path("www/export_to_html/savedres_report.Rmd")
       
-      tmp_report <- file.path(tempdir(), "report.Rmd")
-      file.copy("www/report.Rmd", tmp_report, overwrite = TRUE)
+      shopping_list_df <- as.data.frame(do.call(rbind, shopping_list()))
+      
+      saved_type_counts <- get_type_dist(shopping_list_df)
+      saved_year_counts <- get_year_dist(shopping_list_df)
+      saved_tags_counts <- get_tags_dist(shopping_list_df)
+      saved_tags_connect <- get_sankey_data(shopping_list_df, list_of_tags)
+      
+      shopping_list_df <- shopping_list_df[, c("Name", "Source", "Link")]
       
       # Set up parameters to pass to Rmd document
-      params <- list(n = length(selected_rscs()))
-      # params <- list(n = "something else")
+      params <- list(
+        saved_res_df = shopping_list_df,
+        type_hist = saved_type_counts,
+        year_hist = saved_year_counts,
+        tags_hist = saved_tags_counts,
+        tags_connect = saved_tags_connect
+      )
       
       # Knit the document, passing in the `params` list, and eval it in a
       # child of the global environment (this isolates the code in the document
       # from the code in this app).
       rmarkdown::render(
-        tmp_report, 
-        output_file = filename,
-        output_dir = normalizePath("./test"),
+        rmd_report,
+        output_file = file,
         params = params,
         envir = new.env(parent = globalenv())
       )
-      
-      # Modal to confirm that PDF has been saved
-      showModal(
-        modalDialog(
-          HTML("Successfully downloaded a report with all saved resources!"),
-          footer = NULL,
-          easyClose = TRUE,
-          fade = FALSE
-        )
-      )
     }
-  })
+  )
   
   ## Insights: Switch view ----
   
@@ -1845,6 +1837,9 @@ server <- function(input, output, session) {
   
   observeEvent(shopping_list(), {
     if (length(shopping_list()) > 0) {
+      # If there are items in the shopping cart, allow exporting from Saved Resources tab
+      shinyjs::enable("export")
+      
       # If there are items in the shopping cart, enable both viewing options
       updateRadioGroupButtons(
         session,
@@ -1865,6 +1860,9 @@ server <- function(input, output, session) {
       }
       
     } else {
+      # If there are no items in the shopping cart, disable exporting from Saved Resources tab
+      shinyjs::disable("export")
+      
       # If there are no things in the shopping cart, disable that option from the Insights tab and switch back to Catalog view
       updateRadioGroupButtons(
         session,
@@ -2080,6 +2078,7 @@ server <- function(input, output, session) {
       )
     }
   })
+  
   output$insights_features_year_plot <- renderPlotly({
     fig <- plot_ly(
       x = names(year_counts()),

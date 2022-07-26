@@ -1,0 +1,192 @@
+---
+title: SJP Data Catalog Resources Report
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output: html_document
+params:
+  saved_res_df: NULL
+  type_hist: NULL
+  year_hist: NULL
+  tags_hist: NULL
+  tags_connect: NULL
+always_allow_html: TRUE
+---
+
+```{r, echo=FALSE, warning=FALSE}
+library(gt)
+library(plotly)
+library(htmltools)
+# library(wordcloud)
+# library(d3wordcloud)
+library(sankeyD3)
+```
+
+# Saved Resources
+
+```{r, echo=FALSE}
+saved_res <- params$saved_res_df
+rownames(saved_res) <- NULL
+# saved_res$Link <- paste0("[", params$saved_res_df$Link, "](", params$saved_res_df$Link, ")")
+# knitr::kable(saved_res, caption = "Set of Saved Resources")
+
+make_hyperlink = function(url, text=url) {
+  paste('<a href="', url, '">', text, '</a>')
+}
+
+saved_res %>%
+gt() %>%
+  fmt (
+    columns = 'Link',
+    fns = make_hyperlink
+  ) %>%
+  cols_width(
+    "Name" ~ px(40),
+    "Source" ~ pct(30),
+    "Link" ~ pct(30)
+  )
+```
+
+
+# Meta-Analysis
+
+This report includes visualizations which explore the contents of your Saved Resources from an overarching conceptual lens. The following plots and visuals will help visualize the types of features and themes present among the specified set of resources. Though the specific interpretations of these figures will vary depending on the set of resources you are considering, each section below includes a brief explanation of its contents and how the resulting figures might be interpreted.
+
+## Types of Resources
+
+The following distribution will help you visualize what the spread of resource types present among the set of saved resources. 
+
+```{r, echo=FALSE, fig.show="hold", out.width="100%"}
+data <- data.frame(params$type_hist, stringsAsFactors = FALSE)
+    
+# Organize the values by counts from greatest to least
+if (nrow(data) > 1) {
+  data$all_types <- factor(data$all_types, levels = unique(data$all_types)[order(data$Freq, decreasing = TRUE)])
+  x_vals <- data$all_types
+  y_vals <- data$Freq
+} else {
+  # No need to sort if there's only one type of count
+  x_vals <- names(params$type_hist)
+  y_vals <- as.numeric(params$type_hist)
+}
+
+type_fig <- plot_ly(
+  x = x_vals,
+  y = y_vals,
+  type = "bar",
+)
+type_fig <- type_fig %>% layout(title = "Resource Types", yaxis = list(title = "Count"))
+type_fig
+```
+
+## Years Available
+
+The following distribution will help you visualize what years of data are available among the set of saved resources. This plot may reveal that the available data is more concentrated during a certain time period or may be uniformly spread out across time.
+
+```{r, echo=FALSE, fig.show="hold", out.width="100%"}
+year_fig <- plot_ly(
+      x = names(params$year_hist),
+      y = as.numeric(params$year_hist),
+      type = "bar"
+)
+year_fig <- year_fig %>% layout(title = "Years Available", yaxis = list(title = "Count"))
+year_fig
+```
+
+## Tags
+
+The tags distribution shows the frequency of each tag that occurs within the set of Saved Resources. This plot helps highlight the general breadth or scope of domains and features present in the resource set as well as which of those features are most prominent. 
+
+```{r, echo=FALSE, fig.show="hold", out.width="100%"}
+data <- data.frame(params$tags_hist, stringsAsFactors = FALSE)
+colnames(data) <- c("word", "freq")
+# No need to sort if there's only one type of tag
+if (nrow(data) > 1) {
+  # Organize the values by counts from greatest to least
+  data$word <- factor(data$word, levels = unique(data$word)[order(data$freq, decreasing = FALSE)])
+}
+
+tags_fig <- plot_ly(
+  x = data$freq,
+  y = data$word,
+  type = "bar",
+  # mode = "markers"
+)
+tags_fig <- tags_fig %>% layout(
+  title = "Tags Distribution",
+  yaxis = list(tickfont = list(size = 10)),
+  xaxis = list(title = "Count"),
+  shapes = lines)
+
+# tags_wordcloud <- wordcloud(words=data$Var1, freq=data$Freq, min.freq = 1, max.words=200, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+
+# tags_wordcloud <- wordcloud2(data=data, minRotation=0, maxRotation=0, color="random-dark")
+
+# tags_wordcloud <- d3wordcloud(
+#   words = data$Var1, 
+#   freq = data$Freq, 
+#   rotate.min = 0,           
+#   rotate.max = 0,
+#   tooltip = TRUE,
+#   font = "Arial",
+#   spiral = "rectangular"
+# )
+
+tags_fig
+# tags_wordcloud
+```
+
+## Domain Connections
+
+The following network diagram shows the different flows or connections between various resource attributes. This is useful for investigating how certain features and domains are related to each other; that is, what types of domains are nested within the broader resource types and what types of features are available within those domains. For example, examining the flows from the "Health" node to the various stratification nodes might reveal that there are already many resources within the health domain that are race/ethnicity and gender stratified but there are none that are disability stratified. This type of analysis has the potential to not only highlight what features of the data are represented, but also reveal where there might be existing gaps among the available resources, providing opportunities for novel contributions.
+
+```{r, include=FALSE}
+nodes <- params$tags_connect$nodes
+color_map <- unique(nodes[c("group", "color", "x_pos")])
+level_map <- list("0"="Resource Type", "1"="Data Subject", "2"="Data Attribute")
+current_level <- -1
+
+legend <- ""
+
+for (i in 1:nrow(color_map)) {
+  label <- color_map[i, "group"]
+  color <- color_map[i, "color"]
+  level <- color_map[i, "x_pos"]
+  
+  if (level != current_level) {
+    legend <- paste0(legend, "<br><span><b>", level_map[[toString(level)]], ":&nbsp;</b></span>")
+    current_level <- current_level + 1
+  }
+  
+  legend <- paste0(legend, '<span style="background-color:', color, '; border:1px solid black; height:11px; width:11px; display:inline-block"></span><span>&nbsp;', label, '&emsp;<span>')
+}
+
+file_create <- file.create("tmp/sankey_legend.html")
+writeLines(legend, "tmp/sankey_legend.html")
+```
+```{r, echo=FALSE}
+includeHTML("tmp/sankey_legend.html")
+```
+```{r, include=FALSE}
+file_remove <- file.remove("tmp/sankey_legend.html")
+```
+
+```{r, echo=FALSE, fig.show="hold", out.width="100%"}
+sankeyNetwork(
+  Links = params$tags_connect$links,
+  Nodes = params$tags_connect$nodes,
+  Source = "IDsource",
+  Target = "IDtarget",
+  Value = "value",
+  NodeID = "name",
+  NodeGroup = "group",
+  NodeColor = "color",
+  NodePosX = "x_pos",
+  iterations = 0,
+  zoom = TRUE,
+  dragX = FALSE,
+  dragY = FALSE,
+  showNodeValues = FALSE,
+  highlightChildLinks = TRUE,
+  numberFormat = ".0f",
+  linkOpacity = 0.25
+)
+```
