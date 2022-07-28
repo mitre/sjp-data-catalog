@@ -1,6 +1,5 @@
 ---
 title: SJP Data Catalog Resources Report
-date: "`r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
 output: html_document
 params:
   saved_res_df: NULL
@@ -19,6 +18,9 @@ library(htmltools)
 # library(d3wordcloud)
 library(sankeyD3)
 ```
+
+#### Report downloaded on `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`
+#### Source: [SJP Data Catalog](http://sjp-vm.mitre.org/data/sjp-data-catalog/){target="_blank"}
 
 # Saved Resources
 
