@@ -37,7 +37,7 @@ source("utility.R")
 ## Catalog data ----
 
 # Use local data or pull from SharePoint?
-local <- FALSE
+local <- TRUE
 
 # Data folder
 if (local) {
@@ -82,7 +82,7 @@ max_methods_data <- max(table(methods_data$`Methodology Name`))
 
 # Get min and max years across catalog
 years_avail <- full_catalog[order(full_catalog$Years_Available, na.last=TRUE, decreasing=FALSE), "Years_Available"]
-years_avail <- years_avail[!(is.na(years_avail)) & years_avail != "N/A" & !(grepl("Varies", years_avail))]  #get values that aren't missing or actual text input (e.g. "N/A", "Varies")
+years_avail <- years_avail[!(is.na(years_avail)) & years_avail != "Not Available" & !(grepl("Varies", years_avail))]  #get values that aren't missing or actual text input (e.g. "Not Available", "Varies")
 min_year <- strtoi(substr(years_avail[1], 1, 4))  #pull first 4 characters (YYYY) of first element in years_avail
 end_yrs <- unlist(lapply(years_avail, function(y) {
   strtoi(substr(tail(strsplit(tail(trimws(strsplit(y, ",")[[1]]), n=1), "-")[[1]], n=1), 1, 4))
@@ -769,8 +769,8 @@ server <- function(input, output, session) {
       keep_indices <- c()
       for (i in 1:nrow(tmp_catalog)) {
         i_yr_val <- tmp_catalog[i, "Years_Available"]
-        # Ignore if year data is missing or has string inputs (e.g. "N/A", "Varies")
-        if (!(is.na(i_yr_val)) & i_yr_val != "N/A" & !(grepl("Varies", i_yr_val))) {
+        # Ignore if year data is missing or has string inputs (e.g. "Not Available", "Varies")
+        if (!(is.na(i_yr_val)) & i_yr_val != "Not Available" & !(grepl("Varies", i_yr_val))) {
           # Remove any characters between parentheses and remove any trailing whitespace
           i_yr_str <- trimws(gsub("\\(.*\\)", "", strsplit(i_yr_val, ",")[[1]]))
           # Figure out of selected years overlaps with years available of selected resources
