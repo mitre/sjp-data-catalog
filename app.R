@@ -1742,7 +1742,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       shopping_list_df <- as.data.frame(do.call(rbind, shopping_list()))
-      write.csv(shopping_list_df, file, row.names = FALSE)
+      write.csv(shopping_list_df, file, row.names = FALSE, na="--")
     }
   )
   
