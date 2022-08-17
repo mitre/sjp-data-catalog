@@ -3,7 +3,5 @@
 .RData
 .Ruserdata
 sjp-data-catalog.Rproj
-
 test/*
-
-
+sim_analysis.R

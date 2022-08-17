@@ -322,12 +322,11 @@ get_sankey_data <- function(resource_set, list_of_tags) {
   attr_doms <- unlist(lapply(res_attributes, function(a) {list_of_tags$Domain[list_of_tags$'Tags' == a]}))
   group <- c(res_types, subj_doms, attr_doms)
   color <- unlist(lapply(group, function(g) {color_map[[g]]}))
-  # Generate node coordinates (this is how plotly sankey diagram allows node ordering)
-  x_pos <- c(rep(0.01, length(res_types)), rep(0.5, length(subj_doms)), rep(0.99, length(attr_doms)))
-  y_pos <- c(seq(0.01, 0.95, length.out=length(res_types)), seq(0.01, 0.95, length.out=length(subj_doms)), seq(0.01, 0.95, length.out=length(attr_doms)))
+  # Generate node positions (0 is left-most position then increases towards the right)
+  x_pos <- c(rep(0, length(res_types)), rep(1, length(subj_doms)), rep(2, length(attr_doms)))
   
   # Nodes object
-  nodes <- data.frame(name, group, color, x_pos, y_pos)
+  nodes <- data.frame(name, group, color, x_pos)
   
   # Links object
   links <- data.frame(matrix(ncol = 3, nrow = 0))
@@ -388,4 +387,37 @@ get_sankey_data <- function(resource_set, list_of_tags) {
   out$links <- links
   
   return(out)
+}
+
+
+# Creates a wordcloud using all of the tags 
+# Inputs:
+#   - resource_set: dataframe of a set of resources
+#   - type: "static" or :dynamic"; determines whether to make a static image wordcloud or an interactive d3 wordcloud
+# Output:
+#   - out: wordcloud image drawn from the set of tags used in resource_set
+gen_wordcloud <- function(resource_set, type="static") {
+  tags_counts <- get_tags_dist(resource_set)
+  
+  if (type == "static") {
+    wordcloud(
+      words = names(tags_counts), 
+      freq = tags_counts, 
+      min.freq = 1, 
+      max.words=200, 
+      random.order=FALSE, 
+      rot.per=0, 
+      colors=brewer.pal(8, "Dark2")
+    )
+  } else {
+    d3wordcloud(
+      words = names(tags_counts), 
+      freq = tags_counts, 
+      rotate.min = 0,           
+      rotate.max = 0,
+      tooltip = TRUE,
+      font = "Arial",
+      spiral = "rectangular"
+    )
+  }
 }
