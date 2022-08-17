@@ -27,6 +27,8 @@ library(plotly)
 # install.packages("remotes")
 # remotes::install_github("fbreitwieser/sankeyD3")
 library(sankeyD3)
+library(wordcloud)
+library(d3wordcloud)
 
 
 # Data and Utility definitions ----
@@ -453,7 +455,7 @@ ui <- MITREnavbarPage(
         h2("Catalog Contents"),
           
         HTML(paste0("<p>The SJP Data Catalog contains a total of ", nrow(full_catalog)," resources--", type_counts_full["Dataset"], 
-        " datatsets, ", type_counts_full["Data Repository"], " data repositories, ", type_counts_full["Tool"], " interactive tools, ", 
+        " datasets, ", type_counts_full["Data Repository"], " data repositories, ", type_counts_full["Tool"], " interactive tools, ", 
         type_counts_full["Summary Table"], " summary tables, and ", type_counts_full["Data Methodology"], " data methodologies. The 
         resources represented in the catalog are diverse across multiple characteristics with data availability spanning from ", 
         min_year," to ", max_year," and geographic levels as broad as national level and as narrow as zip codes. A total of ", 
