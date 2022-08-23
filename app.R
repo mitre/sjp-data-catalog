@@ -136,9 +136,6 @@ tags_counts_full <- get_tags_dist(full_catalog)
 
 
 
-  
-
-
 # UI ----
 ui <- MITREnavbarPage(
   title = "Social Justice Platform Data Catalog",
@@ -150,7 +147,7 @@ ui <- MITREnavbarPage(
     title = "Search Catalog",
     value = "search_tab",
     
-    # To activate the disabling/enabling of buttons
+    # To activate shinyjs (disabling/enabling buttons, using JS code)
     shinyjs::useShinyjs(),
     
     # Get name of event triggered
@@ -452,8 +449,7 @@ ui <- MITREnavbarPage(
         
         includeHTML("www/about_overview_intro.html"),
         
-        h2("Catalog Contents"),
-          
+        # Catalog contents section
         HTML(paste0("<p>The SJP Data Catalog contains a total of ", nrow(full_catalog)," resources--", type_counts_full["Dataset"], 
         " datasets, ", type_counts_full["Data Repository"], " data repositories, ", type_counts_full["Tool"], " interactive tools, ", 
         type_counts_full["Summary Table"], " summary tables, and ", type_counts_full["Data Methodology"], " data methodologies. The 
@@ -1165,12 +1161,18 @@ server <- function(input, output, session) {
   observeEvent(input$prev_page, {
     page <- max(1, current_page()-1)
     current_page(page)
+    
+    # Scroll page back to top
+    shinyjs::runjs("window.scrollTo(0, 0)")
   })
   
   # Next page button
   observeEvent(input$next_page, {
     page <- min(current_page()+1, total_pages())
     current_page(page)
+    
+    # Scroll page back to top
+    shinyjs::runjs("window.scrollTo(0, 0)")
   })
   
   # Sort the catalog according to some criterion
