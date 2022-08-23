@@ -443,23 +443,45 @@ ui <- MITREnavbarPage(
       column(
         width = 8,
         
-        # Had to split up About page into two HTML files because the Catalog Contents section needs to be dynamic
-        # relative to the actual contents in the catalog. Needed to pull the subsection out of the HTML file so that
-        # it could access the necessary dynamic values.
+        # h1("The Social Justice Platform Data Catalog"),
         
-        includeHTML("www/about_overview_intro.html"),
-        
-        # Catalog contents section
-        HTML(paste0("<p>The SJP Data Catalog contains a total of ", nrow(full_catalog)," resources--", type_counts_full["Dataset"], 
-        " datasets, ", type_counts_full["Data Repository"], " data repositories, ", type_counts_full["Tool"], " interactive tools, ", 
-        type_counts_full["Summary Table"], " summary tables, and ", type_counts_full["Data Methodology"], " data methodologies. The 
-        resources represented in the catalog are diverse across multiple characteristics with data availability spanning from ", 
-        min_year," to ", max_year," and geographic levels as broad as national level and as narrow as zip codes. A total of ", 
-        length(tags_counts_full)," distinct tags are used to describe the available 
-        resources and cover features ranging from topic/subject to data collection method to stratifications. For a more 
-        detailed summary of the catalog and its contents, please visit the <i>Insights</i> tab.</p>")),
-        
-        includeHTML("www/about_howto.html")
+        navlistPanel(
+          id = "about_sub_tabs",
+          widths = c(3,9),
+          
+          tabPanel(
+            title = "About the Data Catalog",
+            value = "about_whatis_tab",
+            
+            # Had to split up About page into two HTML files because the Catalog Contents section needs to be dynamic
+            # relative to the actual contents in the catalog. Needed to pull the subsection out of the HTML file so that
+            # it could access the necessary dynamic values.
+            h1("The Social Justice Platform Data Catalog"),
+            
+            includeHTML("www/about_overview1.html"),
+            
+            # Catalog contents section
+            HTML(paste0("<p>The SJP Data Catalog contains a total of ", nrow(full_catalog)," resources--", type_counts_full["Dataset"], 
+                        " datasets, ", type_counts_full["Data Repository"], " data repositories, ", type_counts_full["Tool"], " interactive tools, ", 
+                        type_counts_full["Summary Table"], " summary tables, and ", type_counts_full["Data Methodology"], " data methodologies. The 
+                        resources represented in the catalog are diverse across multiple characteristics with data availability spanning from ", 
+                        min_year," to ", max_year," and geographic levels as broad as national level and as narrow as zip codes. A total of ", 
+                        length(tags_counts_full)," distinct tags are used to describe the available 
+                        resources and cover features ranging from topic/subject to data collection method to stratifications. For a more 
+                        detailed summary of the catalog and its contents, please visit the <i>Insights</i> tab.</p>")),
+            
+            includeHTML("www/about_overview2.html")
+          ),
+          
+          tabPanel(
+            title = "How to Use the Data Catalog",
+            value = "about_howto_tab",
+            
+            h1("The Social Justice Platform Data Catalog"),
+            
+            includeHTML("www/about_howto.html")
+          )
+        )
       ),
       
       # Right-side padding
